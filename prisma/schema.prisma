@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+model User {
+  id        String   @id @default(uuid())
+  username  String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+
+  groupsOwned Group[] @relation("GroupOwner")
+  memberships GroupMember[]
+  tasksAssigned Task[] @relation("TaskAssignee")
+  messages Message[]
+}
+
+model Group {
+  id        String   @id @default(uuid())
+  name      String
+  groupCode String   @unique
+  ownerId   String
+  createdAt DateTime @default(now())
+
+  owner     User @relation("GroupOwner", fields: [ownerId], references: [id])
+
+  members   GroupMember[]
+  tasks     Task[]
+  messages  Message[]
+}
+
+model GroupMember {
+  id        String @id @default(uuid())
+  userId    String
+  groupId   String
+  role      String
+
+  user   User  @relation(fields: [userId], references: [id])
+  group  Group @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId])  // tránh join trùng
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  status      String
+  groupId     String
+  assignedTo  String?
+  createdAt   DateTime @default(now())
+
+  group    Group @relation(fields: [groupId], references: [id])
+  assignee User? @relation("TaskAssignee", fields: [assignedTo], references: [id])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  groupId   String
+  senderId  String
+  createdAt DateTime @default(now())
+
+  group  Group @relation(fields: [groupId], references: [id])
+  sender User  @relation(fields: [senderId], references: [id])
+}
