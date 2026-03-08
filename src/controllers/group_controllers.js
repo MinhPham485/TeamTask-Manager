@@ -25,6 +25,21 @@ exports.joinGroup = async (req, res) => {
         const {groupCode} = req.body;
         const group = await prisma.group.findUnique({where: {groupCode}});
         if (!group) return res.status(404).json({error: 'Group not found'});
+        
+        // Check if user is already a member
+        const existingMember = await prisma.groupMember.findUnique({
+            where: {
+                userId_groupId: {
+                    userId: req.user.userId,
+                    groupId: group.id
+                }
+            }
+        });
+        
+        if (existingMember) {
+            return res.status(400).json({error: 'You are already a member of this group'});
+        }
+        
         await prisma.groupMember.create({
             data: {
                 groupId: group.id,
@@ -82,3 +97,24 @@ exports.getGroupById = async (req, res) => {
     }
 };
 
+exports.getGroupMembers = async (req, res) => {
+    try {
+        const {id} = req.params;
+        const members = await prisma.groupMember.findMany({
+            where: {groupId: id},
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true
+                    }
+                }
+            }
+        });
+        res.json(members);
+    }
+    catch (error) {
+        res.status(500).json({error: 'Failed to fetch group members'});
+    }
+};

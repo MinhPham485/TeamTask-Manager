@@ -11,6 +11,7 @@ model User {
   username  String   @unique
   email     String   @unique
   password  String
+  role      Role     @default(User)
   createdAt DateTime @default(now())
 
   groupsOwned Group[] @relation("GroupOwner")
@@ -42,7 +43,12 @@ model GroupMember {
   user   User  @relation(fields: [userId], references: [id])
   group  Group @relation(fields: [groupId], references: [id])
 
-  @@unique([userId, groupId])  // tránh join trùng
+  @@unique([userId, groupId]) 
+}
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
 }
 
 model Task {
@@ -67,4 +73,8 @@ model Message {
 
   group  Group @relation(fields: [groupId], references: [id])
   sender User  @relation(fields: [senderId], references: [id])
+}
+enum Role{
+  User
+  Admin
 }
