@@ -10,5 +10,7 @@ router.put('/:id', verifyToken, canModifyTask, taskController.updateTask);
 router.delete('/:id', verifyToken, canModifyTask, taskController.deleteTask);
 router.put('/:id/status', verifyToken, canModifyTask, taskController.updateTaskStatus);
 router.patch('/:id/status', verifyToken, canModifyTask, taskController.updateTaskStatus);
+router.patch('/:id/position', verifyToken, canModifyTask, taskController.updateTaskPosition);
+router.put('/reorder', verifyToken, isGroupMember, taskController.reorderTasks);
 
 module.exports = router;

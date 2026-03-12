@@ -55,7 +55,8 @@ model Task {
   id          String   @id @default(uuid())
   title       String
   description String?
-  status      String
+  status      TaskStatus @default(TODO)
+  position    Int        @default(0)
   groupId     String
   assignedTo  String?
   createdAt   DateTime @default(now())
