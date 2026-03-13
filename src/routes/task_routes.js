@@ -6,11 +6,12 @@ const taskController = require('../controllers/task_controllers');
 
 router.post('/', verifyToken, isGroupMember, taskController.createTask);
 router.get('/group/:groupId', verifyToken, isGroupMember, taskController.getTasksByGroup);
+router.put('/reorder', verifyToken, isGroupMember, taskController.reorderTasks);
 router.put('/:id', verifyToken, canModifyTask, taskController.updateTask);
 router.delete('/:id', verifyToken, canModifyTask, taskController.deleteTask);
-router.put('/:id/status', verifyToken, canModifyTask, taskController.updateTaskStatus);
-router.patch('/:id/status', verifyToken, canModifyTask, taskController.updateTaskStatus);
+router.put('/:id/move', verifyToken, canModifyTask, taskController.moveTaskToList);
+router.patch('/:id/move', verifyToken, canModifyTask, taskController.moveTaskToList);
 router.patch('/:id/position', verifyToken, canModifyTask, taskController.updateTaskPosition);
-router.put('/reorder', verifyToken, isGroupMember, taskController.reorderTasks);
+router.put('/:id/labels', verifyToken, canModifyTask, taskController.assignLabels);
 
 module.exports = router;

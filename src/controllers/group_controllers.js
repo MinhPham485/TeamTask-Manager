@@ -7,12 +7,44 @@ exports.createGroup = async (req, res) => {
     try {
         const {name} = req.body;
         const groupCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const group = await prisma.group.create({
-            data: {
-                name,
-                groupCode,
-                ownerId: req.user.userId
-            }
+        const group = await prisma.$transaction(async (transaction) => {
+            const createdGroup = await transaction.group.create({
+                data: {
+                    name,
+                    groupCode,
+                    ownerId: req.user.userId
+                }
+            });
+
+            await transaction.groupMember.create({
+                data: {
+                    groupId: createdGroup.id,
+                    userId: req.user.userId,
+                    role: 'owner'
+                }
+            });
+
+            await transaction.list.createMany({
+                data: [
+                    {
+                        name: 'Can lam',
+                        position: 0,
+                        groupId: createdGroup.id
+                    },
+                    {
+                        name: 'Dang lam',
+                        position: 1,
+                        groupId: createdGroup.id
+                    },
+                    {
+                        name: 'Da xong',
+                        position: 2,
+                        groupId: createdGroup.id
+                    }
+                ]
+            });
+
+            return createdGroup;
         });
         res.json(group);
     } catch (error) {
