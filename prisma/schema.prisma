@@ -25,12 +25,15 @@ model Group {
   name      String
   groupCode String   @unique
   ownerId   String
+  coverImage String?
   createdAt DateTime @default(now())
 
   owner     User @relation("GroupOwner", fields: [ownerId], references: [id])
 
   members   GroupMember[]
   tasks     Task[]
+  lists     List[]
+  labels    Label[]
   messages  Message[]
 }
 
@@ -45,24 +48,75 @@ model GroupMember {
 
   @@unique([userId, groupId]) 
 }
-enum TaskStatus {
-  TODO
-  IN_PROGRESS
-  DONE
-}
-
 model Task {
   id          String   @id @default(uuid())
   title       String
   description String?
-  status      TaskStatus @default(TODO)
   position    Int        @default(0)
   groupId     String
+  listId      String
   assignedTo  String?
+  dueDate     DateTime?
   createdAt   DateTime @default(now())
 
   group    Group @relation(fields: [groupId], references: [id])
+  list     List  @relation(fields: [listId], references: [id])
   assignee User? @relation("TaskAssignee", fields: [assignedTo], references: [id])
+  taskLabels TaskLabel[]
+  checklistItems ChecklistItem[]
+
+  @@index([listId, position])
+}
+
+model List {
+  id        String   @id @default(uuid())
+  name      String
+  position  Int      @default(0)
+  groupId   String
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id])
+  tasks Task[]
+
+  @@index([groupId, position])
+}
+
+model Label {
+  id        String   @id @default(uuid())
+  name      String
+  color     String
+  groupId   String
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id])
+  taskLabels TaskLabel[]
+
+  @@index([groupId])
+}
+
+model TaskLabel {
+  taskId    String
+  labelId   String
+  createdAt DateTime @default(now())
+
+  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@index([labelId])
+}
+
+model ChecklistItem {
+  id          String   @id @default(uuid())
+  title       String
+  isCompleted Boolean  @default(false)
+  position    Int      @default(0)
+  taskId      String
+  createdAt   DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id])
+
+  @@index([taskId, position])
 }
 
 model Message {
