@@ -1,15 +1,6 @@
-const {PrismaClient, TaskStatus} = require('@prisma/client');
+const {PrismaClient} = require('@prisma/client');
 require('dotenv').config();
 const prisma = new PrismaClient();
-
-const VALID_TASK_STATUSES = Object.values(TaskStatus);
-const TASK_STATUS_ORDER = {
-    TODO: 0,
-    IN_PROGRESS: 1,
-    DONE: 2
-};
-
-const isValidTaskStatus = (status) => VALID_TASK_STATUSES.includes(status);
 
 const clampPosition = (position, maxPosition) => {
     if (!Number.isInteger(position)) {
@@ -42,11 +33,49 @@ const getTaskWithAssignee = (taskId) => prisma.task.findUnique({
 
 exports.createTask = async (req, res) => {
     try {
-        const {title, description, groupId, assignedTo} = req.body;
+        const {title, description, groupId, assignedTo, listId} = req.body;
+
+        if (!groupId) {
+            return res.status(400).json({ error: 'Group ID is required' });
+        }
+
+        let targetList = null;
+
+        if (listId) {
+            targetList = await prisma.list.findFirst({
+                where: {
+                    id: listId,
+                    groupId
+                },
+                select: {
+                    id: true
+                }
+            });
+
+            if (!targetList) {
+                return res.status(400).json({ error: 'List not found in this group' });
+            }
+        } else {
+            targetList = await prisma.list.findFirst({
+                where: { groupId },
+                orderBy: [
+                    { position: 'asc' },
+                    { createdAt: 'asc' }
+                ],
+                select: {
+                    id: true
+                }
+            });
+
+            if (!targetList) {
+                return res.status(400).json({ error: 'Group has no lists' });
+            }
+        }
+
         const lastTask = await prisma.task.findFirst({
             where: {
                 groupId,
-                status: TaskStatus.TODO
+                listId: targetList.id
             },
             orderBy: {
                 position: 'desc'
@@ -61,7 +90,7 @@ exports.createTask = async (req, res) => {
                 title,
                 description,
                 groupId,
-                status: TaskStatus.TODO,
+                listId: targetList.id,
                 position: (lastTask?.position ?? -1) + 1,
                 assignedTo
             },
@@ -84,28 +113,42 @@ exports.createTask = async (req, res) => {
 exports.getTasksByGroup = async (req, res) => {
     try {
         const {groupId} = req.params;
-        const tasks = await prisma.task.findMany({
-            where: { groupId },
-            orderBy: [
-                { position: 'asc' },
-                { createdAt: 'asc' }
-            ],
-            include: { 
-                assignee: {
-                    select: {
-                        id: true,
-                        username: true,
-                        email: true
+        const [tasks, lists] = await Promise.all([
+            prisma.task.findMany({
+                where: { groupId },
+                orderBy: [
+                    { position: 'asc' },
+                    { createdAt: 'asc' }
+                ],
+                include: {
+                    assignee: {
+                        select: {
+                            id: true,
+                            username: true,
+                            email: true
+                        }
                     }
                 }
-            }
-        });
+            }),
+            prisma.list.findMany({
+                where: { groupId },
+                select: {
+                    id: true,
+                    position: true
+                }
+            })
+        ]);
+
+        const listOrderMap = lists.reduce((accumulator, list) => {
+            accumulator[list.id] = list.position;
+            return accumulator;
+        }, {});
 
         tasks.sort((firstTask, secondTask) => {
-            const statusDifference = TASK_STATUS_ORDER[firstTask.status] - TASK_STATUS_ORDER[secondTask.status];
+            const listPositionDifference = (listOrderMap[firstTask.listId] ?? Number.MAX_SAFE_INTEGER) - (listOrderMap[secondTask.listId] ?? Number.MAX_SAFE_INTEGER);
 
-            if (statusDifference !== 0) {
-                return statusDifference;
+            if (listPositionDifference !== 0) {
+                return listPositionDifference;
             }
 
             if (firstTask.position !== secondTask.position) {
@@ -118,16 +161,16 @@ exports.getTasksByGroup = async (req, res) => {
         res.json(tasks);
     } catch (error) {
         res.status(500).json({ error: error.message });
-    }   
+    }
 };
 
 exports.updateTask = async (req, res) => {
-    try {   
+    try {
         const {id} = req.params;
-        const {title, description, assignedTo} = req.body;
+        const {title, description, assignedTo, dueDate} = req.body;
         const task = await prisma.task.update({
             where: {id},
-            data: {title, description, assignedTo}
+            data: {title, description, assignedTo, dueDate}
         });
         res.json(task);
     }
@@ -146,11 +189,15 @@ exports.deleteTask = async (req, res) => {
     }
 };
 
-
-exports.updateTaskStatus = async (req, res) => {
+exports.moveTaskToList = async (req, res) => {
     try {
         const {id} = req.params;
-        const {status} = req.body;
+        const {listId} = req.body;
+
+        if (!listId) {
+            return res.status(400).json({error: 'List ID is required'});
+        }
+
         const currentTask = req.task || await prisma.task.findUnique({
             where: { id }
         });
@@ -159,11 +206,19 @@ exports.updateTaskStatus = async (req, res) => {
             return res.status(404).json({error: 'Task not found'});
         }
 
-        if (!isValidTaskStatus(status)) {
-            return res.status(400).json({error: 'Invalid task status'});
+        const targetList = await prisma.list.findUnique({
+            where: { id: listId },
+            select: {
+                id: true,
+                groupId: true
+            }
+        });
+
+        if (!targetList || targetList.groupId !== currentTask.groupId) {
+            return res.status(400).json({error: 'List does not belong to task group'});
         }
 
-        if (currentTask.status === status) {
+        if (currentTask.listId === listId) {
             const task = await getTaskWithAssignee(id);
             return res.json(task);
         }
@@ -171,7 +226,7 @@ exports.updateTaskStatus = async (req, res) => {
         const targetLastTask = await prisma.task.findFirst({
             where: {
                 groupId: currentTask.groupId,
-                status,
+                listId,
                 NOT: {
                     id
                 }
@@ -188,7 +243,7 @@ exports.updateTaskStatus = async (req, res) => {
             const remainingTasks = await transaction.task.findMany({
                 where: {
                     groupId: currentTask.groupId,
-                    status: currentTask.status,
+                    listId: currentTask.listId,
                     NOT: {
                         id
                     }
@@ -210,7 +265,7 @@ exports.updateTaskStatus = async (req, res) => {
             await transaction.task.update({
                 where: { id },
                 data: {
-                    status,
+                    listId,
                     position: (targetLastTask?.position ?? -1) + 1
                 }
             });
@@ -218,7 +273,7 @@ exports.updateTaskStatus = async (req, res) => {
 
         const task = await getTaskWithAssignee(id);
         res.json(task);
-    } 
+    }
     catch (error) {
         res.status(500).json({error: error.message});
     }
@@ -227,7 +282,7 @@ exports.updateTaskStatus = async (req, res) => {
 exports.updateTaskPosition = async (req, res) => {
     try {
         const {id} = req.params;
-        const {status, position} = req.body;
+        const {listId, position} = req.body;
         const currentTask = req.task || await prisma.task.findUnique({
             where: { id }
         });
@@ -236,16 +291,23 @@ exports.updateTaskPosition = async (req, res) => {
             return res.status(404).json({error: 'Task not found'});
         }
 
-        const nextStatus = status || currentTask.status;
+        const nextListId = listId || currentTask.listId;
+        const targetList = await prisma.list.findUnique({
+            where: { id: nextListId },
+            select: {
+                id: true,
+                groupId: true
+            }
+        });
 
-        if (!isValidTaskStatus(nextStatus)) {
-            return res.status(400).json({error: 'Invalid task status'});
+        if (!targetList || targetList.groupId !== currentTask.groupId) {
+            return res.status(400).json({error: 'List does not belong to task group'});
         }
 
         const targetTasks = await prisma.task.findMany({
             where: {
                 groupId: currentTask.groupId,
-                status: nextStatus,
+                listId: nextListId,
                 NOT: {
                     id
                 }
@@ -266,11 +328,11 @@ exports.updateTaskPosition = async (req, res) => {
         }
 
         await prisma.$transaction(async (transaction) => {
-            if (currentTask.status !== nextStatus) {
+            if (currentTask.listId !== nextListId) {
                 const sourceTasks = await transaction.task.findMany({
                     where: {
                         groupId: currentTask.groupId,
-                        status: currentTask.status,
+                        listId: currentTask.listId,
                         NOT: {
                             id
                         }
@@ -296,7 +358,7 @@ exports.updateTaskPosition = async (req, res) => {
             await Promise.all(reorderedTaskIds.map((taskId, index) => transaction.task.update({
                 where: { id: taskId },
                 data: {
-                    status: nextStatus,
+                    listId: nextListId,
                     position: index
                 }
             })));
@@ -311,14 +373,14 @@ exports.updateTaskPosition = async (req, res) => {
 
 exports.reorderTasks = async (req, res) => {
     try {
-        const {groupId, status, taskIds} = req.body;
+        const {groupId, listId, taskIds} = req.body;
 
         if (!groupId) {
             return res.status(400).json({error: 'Group ID is required'});
         }
 
-        if (!isValidTaskStatus(status)) {
-            return res.status(400).json({error: 'Invalid task status'});
+        if (!listId) {
+            return res.status(400).json({error: 'List ID is required'});
         }
 
         if (!Array.isArray(taskIds) || taskIds.length === 0) {
@@ -336,7 +398,8 @@ exports.reorderTasks = async (req, res) => {
                 id: {
                     in: taskIds
                 },
-                groupId
+                groupId,
+                listId
             },
             select: {
                 id: true
@@ -350,7 +413,7 @@ exports.reorderTasks = async (req, res) => {
         await prisma.$transaction(taskIds.map((taskId, index) => prisma.task.update({
             where: { id: taskId },
             data: {
-                status,
+                listId,
                 position: index
             }
         })));
@@ -358,7 +421,7 @@ exports.reorderTasks = async (req, res) => {
         const updatedTasks = await prisma.task.findMany({
             where: {
                 groupId,
-                status
+                listId
             },
             orderBy: [
                 { position: 'asc' },
@@ -376,6 +439,92 @@ exports.reorderTasks = async (req, res) => {
         });
 
         res.json(updatedTasks);
+    } catch (error) {
+        res.status(500).json({error: error.message});
+    }
+};
+
+exports.assignLabels = async (req, res) => {
+    try {
+        const {id} = req.params;
+        const {labelIds} = req.body;
+
+        if (!Array.isArray(labelIds)) {
+            return res.status(400).json({error: 'labelIds must be an array'});
+        }
+
+        const currentTask = req.task || await prisma.task.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                groupId: true
+            }
+        });
+
+        if (!currentTask) {
+            return res.status(404).json({error: 'Task not found'});
+        }
+
+        const uniqueLabelIds = [...new Set(labelIds)];
+
+        if (uniqueLabelIds.length !== labelIds.length) {
+            return res.status(400).json({error: 'labelIds must not contain duplicates'});
+        }
+
+        if (uniqueLabelIds.length > 0) {
+            const labels = await prisma.label.findMany({
+                where: {
+                    id: {
+                        in: uniqueLabelIds
+                    },
+                    groupId: currentTask.groupId
+                },
+                select: {
+                    id: true
+                }
+            });
+
+            if (labels.length !== uniqueLabelIds.length) {
+                return res.status(400).json({error: 'One or more labels do not belong to task group'});
+            }
+        }
+
+        await prisma.$transaction(async (transaction) => {
+            await transaction.taskLabel.deleteMany({
+                where: {
+                    taskId: id
+                }
+            });
+
+            if (uniqueLabelIds.length > 0) {
+                await transaction.taskLabel.createMany({
+                    data: uniqueLabelIds.map((labelId) => ({
+                        taskId: id,
+                        labelId
+                    }))
+                });
+            }
+        });
+
+        const updatedTask = await prisma.task.findUnique({
+            where: {id},
+            include: {
+                assignee: {
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true
+                    }
+                },
+                taskLabels: {
+                    include: {
+                        label: true
+                    }
+                }
+            }
+        });
+
+        res.json(updatedTask);
     } catch (error) {
         res.status(500).json({error: error.message});
     }

@@ -5,6 +5,8 @@ const groupRoutes = require('./routes/group_routes');
 const testRoutes = require("./routes/test_routes");
 const app = express();
 const taskRoutes = require('./routes/task_routes');
+const listRoutes = require('./routes/list_routes');
+const labelRoutes = require('./routes/label_routes');
 
 
 app.use(cors());
@@ -12,6 +14,8 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/lists', listRoutes);
+app.use('/api/labels', labelRoutes);
 app.use("/api", testRoutes);
 
 
