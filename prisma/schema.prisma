@@ -18,6 +18,7 @@ model User {
   memberships GroupMember[]
   tasksAssigned Task[] @relation("TaskAssignee")
   messages Message[]
+  taskComments TaskComment[]
 }
 
 model Group {
@@ -64,8 +65,25 @@ model Task {
   assignee User? @relation("TaskAssignee", fields: [assignedTo], references: [id])
   taskLabels TaskLabel[]
   checklistItems ChecklistItem[]
+  comments TaskComment[]
 
   @@index([listId, position])
+}
+
+
+model TaskComment {
+  id        String   @id @default(uuid())
+  content   String
+  taskId    String
+  senderId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  sender User @relation(fields: [senderId], references: [id])
+
+  @@index([taskId, createdAt])
+  @@index([senderId])
 }
 
 model List {
