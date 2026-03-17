@@ -4,7 +4,6 @@ const cors = require('cors');
 const {Server} = require('socket.io');
 const authRoutes = require('./routes/auth_routes');
 const groupRoutes = require('./routes/group_routes');
-const testRoutes = require("./routes/test_routes");
 const taskRoutes = require('./routes/task_routes');
 const listRoutes = require('./routes/list_routes');
 const labelRoutes = require('./routes/label_routes');
@@ -26,7 +25,6 @@ app.use('/api/labels', labelRoutes);
 app.use('/api/checklists', checklistRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
-app.use("/api", testRoutes);
 
 
 app.get('/', (req, res) => {

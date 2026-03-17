@@ -1,64 +1,25 @@
 const {PrismaClient} = require('@prisma/client');
 require('dotenv').config();
+const {ensureMembership, createGroupMessage} = require('../services/message_service');
 
 const prisma = new PrismaClient();
-
-const ensureMembership = async (userId, groupId) => {
-    const membership = await prisma.groupMember.findUnique({
-        where: {
-            userId_groupId: {
-                userId,
-                groupId
-            }
-        },
-        select: {
-            id: true
-        }
-    });
-
-    return Boolean(membership);
-};
 
 exports.createMessage = async (req, res) => {
     try {
         const {groupId, content} = req.body;
 
-        if (!groupId || typeof content !== 'string') {
-            return res.status(400).json({error: 'Group ID and content are required'});
-        }
-
-        const normalizedContent = content.trim();
-
-        if (!normalizedContent) {
-            return res.status(400).json({error: 'Content must not be empty'});
-        }
-
-        if (normalizedContent.length > 2000) {
-            return res.status(400).json({error: 'Content exceeds 2000 characters'});
-        }
-
-        const hasAccess = await ensureMembership(req.user.userId, groupId);
-
-        if (!hasAccess) {
-            return res.status(403).json({error: 'You are not a member of this group'});
-        }
-
-        const message = await prisma.message.create({
-            data: {
-                groupId,
-                content: normalizedContent,
-                senderId: req.user.userId
-            },
-            include: {
-                sender: {
-                    select: {
-                        id: true,
-                        username: true,
-                        email: true
-                    }
-                }
-            }
+        const result = await createGroupMessage({
+            prisma,
+            userId: req.user.userId,
+            groupId,
+            content
         });
+
+        if (result.error) {
+            return res.status(result.status).json({error: result.error});
+        }
+
+        const {message} = result;
 
         const io = req.app.get('io');
 
@@ -75,7 +36,7 @@ exports.createMessage = async (req, res) => {
 exports.getMessagesByGroup = async (req, res) => {
     try {
         const {groupId} = req.params;
-        const hasAccess = await ensureMembership(req.user.userId, groupId);
+        const hasAccess = await ensureMembership(prisma, req.user.userId, groupId);
 
         if (!hasAccess) {
             return res.status(403).json({error: 'You are not a member of this group'});
@@ -119,7 +80,7 @@ exports.deleteMessage = async (req, res) => {
             return res.status(404).json({error: 'Message not found'});
         }
 
-        const hasAccess = await ensureMembership(req.user.userId, message.groupId);
+        const hasAccess = await ensureMembership(prisma, req.user.userId, message.groupId);
 
         if (!hasAccess) {
             return res.status(403).json({error: 'You are not a member of this group'});

@@ -31,12 +31,36 @@ const getTaskWithAssignee = (taskId) => prisma.task.findUnique({
     }
 });
 
+const isGroupMember = async (userId, groupId) => {
+    const membership = await prisma.groupMember.findUnique({
+        where: {
+            userId_groupId: {
+                userId,
+                groupId
+            }
+        },
+        select: {
+            id: true
+        }
+    });
+
+    return Boolean(membership);
+};
+
 exports.createTask = async (req, res) => {
     try {
         const {title, description, groupId, assignedTo, listId} = req.body;
 
         if (!groupId) {
             return res.status(400).json({ error: 'Group ID is required' });
+        }
+
+        if (assignedTo) {
+            const assigneeInGroup = await isGroupMember(assignedTo, groupId);
+
+            if (!assigneeInGroup) {
+                return res.status(400).json({ error: 'Assignee must be a member of the group' });
+            }
         }
 
         let targetList = null;
@@ -168,6 +192,27 @@ exports.updateTask = async (req, res) => {
     try {
         const {id} = req.params;
         const {title, description, assignedTo, dueDate} = req.body;
+
+        const currentTask = req.task || await prisma.task.findUnique({
+            where: {id},
+            select: {
+                id: true,
+                groupId: true
+            }
+        });
+
+        if (!currentTask) {
+            return res.status(404).json({error: 'Task not found'});
+        }
+
+        if (assignedTo) {
+            const assigneeInGroup = await isGroupMember(assignedTo, currentTask.groupId);
+
+            if (!assigneeInGroup) {
+                return res.status(400).json({error: 'Assignee must be a member of the group'});
+            }
+        }
+
         const task = await prisma.task.update({
             where: {id},
             data: {title, description, assignedTo, dueDate}

@@ -150,3 +150,166 @@ exports.getGroupMembers = async (req, res) => {
         res.status(500).json({error: 'Failed to fetch group members'});
     }
 };
+
+exports.updateGroup = async (req, res) => {
+    try {
+        const {id} = req.params;
+        const {name} = req.body;
+
+        if (!name || !name.trim()) {
+            return res.status(400).json({error: 'Group name is required'});
+        }
+
+        const updatedGroup = await prisma.group.update({
+            where: {id},
+            data: {
+                name: name.trim()
+            }
+        });
+
+        res.json(updatedGroup);
+    } catch (error) {
+        res.status(500).json({error: 'Failed to update group'});
+    }
+};
+
+exports.removeGroupMember = async (req, res) => {
+    try {
+        const {id, userId} = req.params;
+
+        const targetMember = await prisma.groupMember.findUnique({
+            where: {
+                userId_groupId: {
+                    userId,
+                    groupId: id
+                }
+            }
+        });
+
+        if (!targetMember) {
+            return res.status(404).json({error: 'Member not found in this group'});
+        }
+
+        const group = await prisma.group.findUnique({
+            where: {id},
+            select: {
+                ownerId: true
+            }
+        });
+
+        if (!group) {
+            return res.status(404).json({error: 'Group not found'});
+        }
+
+        if (group.ownerId === userId) {
+            return res.status(400).json({error: 'Cannot remove group owner'});
+        }
+
+        await prisma.groupMember.delete({
+            where: {
+                userId_groupId: {
+                    userId,
+                    groupId: id
+                }
+            }
+        });
+
+        res.json({message: 'Member removed successfully'});
+    } catch (error) {
+        res.status(500).json({error: 'Failed to remove group member'});
+    }
+};
+
+exports.deleteGroup = async (req, res) => {
+    try {
+        const {id} = req.params;
+
+        const group = await prisma.group.findUnique({
+            where: {id},
+            select: {
+                id: true
+            }
+        });
+
+        if (!group) {
+            return res.status(404).json({error: 'Group not found'});
+        }
+
+        await prisma.$transaction(async (transaction) => {
+            const tasks = await transaction.task.findMany({
+                where: {groupId: id},
+                select: {
+                    id: true
+                }
+            });
+
+            const taskIds = tasks.map((task) => task.id);
+
+            if (taskIds.length > 0) {
+                await transaction.checklistItem.deleteMany({
+                    where: {
+                        taskId: {
+                            in: taskIds
+                        }
+                    }
+                });
+
+                await transaction.taskComment.deleteMany({
+                    where: {
+                        taskId: {
+                            in: taskIds
+                        }
+                    }
+                });
+
+                await transaction.taskLabel.deleteMany({
+                    where: {
+                        taskId: {
+                            in: taskIds
+                        }
+                    }
+                });
+
+                await transaction.task.deleteMany({
+                    where: {
+                        id: {
+                            in: taskIds
+                        }
+                    }
+                });
+            }
+
+            await transaction.message.deleteMany({
+                where: {
+                    groupId: id
+                }
+            });
+
+            await transaction.label.deleteMany({
+                where: {
+                    groupId: id
+                }
+            });
+
+            await transaction.list.deleteMany({
+                where: {
+                    groupId: id
+                }
+            });
+
+            await transaction.groupMember.deleteMany({
+                where: {
+                    groupId: id
+                }
+            });
+
+            await transaction.group.delete({
+                where: {id}
+            });
+        });
+
+        res.json({message: 'Group deleted successfully'});
+    } catch (error) {
+        res.status(500).json({error: 'Failed to delete group'});
+    }
+};

@@ -1,23 +1,8 @@
 const jwt = require('jsonwebtoken');
 const {PrismaClient} = require('@prisma/client');
+const {ensureMembership, createGroupMessage} = require('../services/message_service');
 
 const prisma = new PrismaClient();
-
-const ensureMembership = async (userId, groupId) => {
-    const membership = await prisma.groupMember.findUnique({
-        where: {
-            userId_groupId: {
-                userId,
-                groupId
-            }
-        },
-        select: {
-            id: true
-        }
-    });
-
-    return Boolean(membership);
-};
 
 const extractToken = (socket) => {
     if (socket.handshake?.auth?.token) {
@@ -66,7 +51,7 @@ module.exports = (io) => {
                     return;
                 }
 
-                const hasAccess = await ensureMembership(socket.user.userId, groupId);
+                const hasAccess = await ensureMembership(prisma, socket.user.userId, groupId);
 
                 if (!hasAccess) {
                     if (callback) callback({ok: false, error: 'You are not a member of this group'});
@@ -96,51 +81,21 @@ module.exports = (io) => {
 
         socket.on('chat:send-message', async (payload, callback) => {
             try {
-                const groupId = payload?.groupId;
-                const content = payload?.content;
-
-                if (!groupId || typeof content !== 'string') {
-                    if (callback) callback({ok: false, error: 'Group ID and content are required'});
-                    return;
-                }
-
-                const normalizedContent = content.trim();
-
-                if (!normalizedContent) {
-                    if (callback) callback({ok: false, error: 'Content must not be empty'});
-                    return;
-                }
-
-                if (normalizedContent.length > 2000) {
-                    if (callback) callback({ok: false, error: 'Content exceeds 2000 characters'});
-                    return;
-                }
-
-                const hasAccess = await ensureMembership(socket.user.userId, groupId);
-
-                if (!hasAccess) {
-                    if (callback) callback({ok: false, error: 'You are not a member of this group'});
-                    return;
-                }
-
-                const message = await prisma.message.create({
-                    data: {
-                        groupId,
-                        content: normalizedContent,
-                        senderId: socket.user.userId
-                    },
-                    include: {
-                        sender: {
-                            select: {
-                                id: true,
-                                username: true,
-                                email: true
-                            }
-                        }
-                    }
+                const result = await createGroupMessage({
+                    prisma,
+                    userId: socket.user.userId,
+                    groupId: payload?.groupId,
+                    content: payload?.content
                 });
 
-                io.to(`group:${groupId}`).emit('chat:message:new', message);
+                if (result.error) {
+                    if (callback) callback({ok: false, error: result.error});
+                    return;
+                }
+
+                const {message} = result;
+
+                io.to(`group:${message.groupId}`).emit('chat:message:new', message);
 
                 if (callback) callback({ok: true, message});
             } catch (error) {
