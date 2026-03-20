@@ -1,5 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import axios from "axios";
+import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,6 +18,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export function RegisterPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const setToken = authStore((state) => state.setToken);
   const setSession = authStore((state) => state.setSession);
   const clearSession = authStore((state) => state.clearSession);
@@ -37,6 +40,7 @@ export function RegisterPage() {
     setError(null);
 
     try {
+      queryClient.clear();
       await authApi.register(values);
       const loginResponse = await authApi.login({
         username: values.username,
@@ -46,8 +50,13 @@ export function RegisterPage() {
       const profile = await authApi.profile();
       setSession({ token: loginResponse.token, user: profile });
       navigate("/dashboard", { replace: true });
-    } catch {
+    } catch (error) {
       clearSession();
+      if (axios.isAxiosError<{ error?: string }>(error)) {
+        setError(error.response?.data?.error ?? "Registration failed. Please try another email/username.");
+        return;
+      }
+
       setError("Registration failed. Please try another email/username.");
     }
   };

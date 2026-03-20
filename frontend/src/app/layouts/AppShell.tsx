@@ -1,5 +1,8 @@
 import { PropsWithChildren } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { authStore } from "@/features/auth/store/authStore";
+import { disconnectSocketClient } from "@/features/chat/socket/socketClient";
 
 const navItems = [
   { to: "/dashboard", label: "Groups" },
@@ -9,6 +12,16 @@ const navItems = [
 
 export function AppShell({ children }: PropsWithChildren) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const clearSession = authStore((state) => state.clearSession);
+
+  const handleLogout = () => {
+    disconnectSocketClient();
+    queryClient.clear();
+    clearSession();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <div className="app-shell">
@@ -29,7 +42,12 @@ export function AppShell({ children }: PropsWithChildren) {
       <section className="content-wrapper">
         <header className="topbar">
           <h1>TeamTask Manager</h1>
-          <span className="topbar-caption">Phase 1-2 frontend architecture ready</span>
+          <div className="topbar-actions">
+            <span className="topbar-caption">Phase 4 group management ready</span>
+            <button className="logout-button" onClick={handleLogout}>
+              Logout
+            </button>
+          </div>
         </header>
         <main className="content">{children}</main>
       </section>

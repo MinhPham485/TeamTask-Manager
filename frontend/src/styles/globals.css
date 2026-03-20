@@ -77,6 +77,11 @@ a {
   margin: 0;
 }
 
+.success-text {
+  color: #027a48;
+  margin: 0;
+}
+
 .app-shell {
   min-height: 100vh;
   display: grid;
@@ -139,6 +144,23 @@ a {
   font-size: 0.9rem;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logout-button {
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
+  font-weight: 700;
+  padding: 0 0.8rem;
+  cursor: pointer;
+}
+
 .content {
   padding: 1.25rem;
 }
@@ -152,6 +174,152 @@ a {
 
 .page-card h2 {
   margin-top: 0;
+}
+
+.muted-text {
+  color: var(--muted);
+}
+
+.page-feedback {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.group-dashboard {
+  display: grid;
+  gap: 1rem;
+}
+
+.group-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.form-card {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.form-card h2,
+.form-card h3 {
+  margin: 0;
+}
+
+.form-card input {
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  padding: 0 0.75rem;
+}
+
+.form-card button,
+.link-button,
+.danger-button {
+  height: 40px;
+  border-radius: 10px;
+  border: none;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.form-card button,
+.link-button {
+  background: var(--primary);
+  color: #101010;
+}
+
+.link-button {
+  min-width: 88px;
+  padding: 0 0.9rem;
+}
+
+.danger-button {
+  background: #d92d20;
+  color: #fff;
+  padding: 0 0.9rem;
+}
+
+.group-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.group-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem;
+}
+
+.group-item h3 {
+  margin: 0;
+}
+
+.group-item p {
+  margin: 0.2rem 0 0;
+}
+
+.group-detail-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.group-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.group-header-row h2 {
+  margin-bottom: 0.25rem;
+}
+
+.group-header-row p {
+  margin: 0;
+}
+
+.owner-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.danger-card {
+  border: 1px solid #fecdca;
+  background: #fff7f6;
+  border-radius: 12px;
+  padding: 0.8rem;
+}
+
+.member-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.member-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem;
+}
+
+.member-item p {
+  margin: 0.2rem 0 0;
+}
+
+.member-name {
+  margin: 0;
+  font-weight: 700;
 }
 
 .mobile-nav {
@@ -190,5 +358,17 @@ a {
   .mobile-link.active {
     color: var(--text);
     background: rgba(252, 163, 17, 0.2);
+  }
+
+  .group-actions-grid,
+  .owner-actions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .group-item,
+  .member-item,
+  .group-header-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

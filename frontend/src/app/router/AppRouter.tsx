@@ -6,6 +6,7 @@ import { RegisterPage } from "@/pages/RegisterPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { BoardPage } from "@/pages/BoardPage";
 import { ChatPage } from "@/pages/ChatPage";
+import { GroupDetailPage } from "@/pages/GroupDetailPage";
 
 export function AppRouter() {
   return (
@@ -29,6 +30,14 @@ export function AppRouter() {
           element={
             <AppShell>
               <DashboardPage />
+            </AppShell>
+          }
+        />
+        <Route
+          path="/groups/:groupId"
+          element={
+            <AppShell>
+              <GroupDetailPage />
             </AppShell>
           }
         />

@@ -107,9 +107,18 @@ exports.getGroupById = async (req, res) => {
         const {id} = req.params;
         const group = await prisma.group.findUnique({
             where: {id},
-            include: {
+            select: {
+                id: true,
+                name: true,
+                groupCode: true,
+                ownerId: true,
+                createdAt: true,
                 members: {
-                    include: {
+                    select: {
+                        id: true,
+                        groupId: true,
+                        userId: true,
+                        role: true,
                         user: {
                             select: {
                                 id: true,
@@ -118,13 +127,13 @@ exports.getGroupById = async (req, res) => {
                             }
                         }
                     }
-                },
-                tasks: true
+                }
             }
         });
         if (!group) return res.status(404).json({error: 'Group not found'});
         res.json(group);
     } catch (error) {
+        console.error('getGroupById error:', error);
         res.status(500).json({error: 'Failed to fetch group'});
     }
 };

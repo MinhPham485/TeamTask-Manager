@@ -13,7 +13,7 @@ export type User = {
 export type Group = {
   id: string;
   name: string;
-  inviteCode: string;
+  groupCode: string;
   ownerId: string;
   createdAt?: string;
   updatedAt?: string;
@@ -23,8 +23,20 @@ export type GroupMember = {
   id: string;
   groupId: string;
   userId: string;
-  role: "OWNER" | "MEMBER";
+  role: "owner" | "member";
   user?: User;
+};
+
+export type GroupMembership = {
+  id: string;
+  userId: string;
+  groupId: string;
+  role: "owner" | "member";
+  group: Group;
+};
+
+export type GroupDetail = Group & {
+  members: GroupMember[];
 };
 
 export type List = {

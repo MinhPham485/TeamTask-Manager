@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,6 +16,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const setToken = authStore((state) => state.setToken);
   const setSession = authStore((state) => state.setSession);
   const clearSession = authStore((state) => state.clearSession);
@@ -35,6 +37,7 @@ export function LoginPage() {
     setError(null);
 
     try {
+      queryClient.clear();
       const loginResponse = await authApi.login(values);
       setToken(loginResponse.token);
       const profile = await authApi.profile();

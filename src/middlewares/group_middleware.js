@@ -3,7 +3,7 @@ const prisma = new PrismaClient();
 
 const isGroupMember = async (req, res, next) => {
     try {
-        const groupId = req.body.groupId || req.params.groupId || req.params.id;
+        const groupId = req.body?.groupId || req.params.groupId || req.params.id;
         
         if (!groupId) {
             return res.status(400).json({error: 'Group ID is required'});

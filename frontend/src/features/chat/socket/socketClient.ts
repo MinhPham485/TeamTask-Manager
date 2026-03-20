@@ -27,3 +27,12 @@ export function reconnectSocketAuthToken() {
 
   socket.auth = { token: authStore.getState().token };
 }
+
+export function disconnectSocketClient() {
+  if (!socket) {
+    return;
+  }
+
+  socket.disconnect();
+  socket = null;
+}
