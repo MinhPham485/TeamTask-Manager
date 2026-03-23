@@ -20,8 +20,8 @@ export const listApi = {
     const response = await http.put<List>(`/lists/${listId}`, payload);
     return response.data;
   },
-  reorder: async (groupId: string, orderedListIds: string[]) => {
-    const response = await http.put<List[]>("/lists/reorder", { groupId, orderedListIds });
+  reorder: async (groupId: string, listIds: string[]) => {
+    const response = await http.put<List[]>("/lists/reorder", { groupId, listIds });
     return response.data;
   },
   remove: async (listId: string) => {

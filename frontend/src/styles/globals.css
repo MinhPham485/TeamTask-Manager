@@ -322,6 +322,131 @@ a {
   font-weight: 700;
 }
 
+.board-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.board-toolbar {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.board-toolbar h2 {
+  margin: 0;
+}
+
+.board-toolbar-controls {
+  display: grid;
+  gap: 0.7rem;
+  align-items: stretch;
+  max-width: 420px;
+}
+
+.board-toolbar-controls select,
+.board-create-list input,
+.task-quick-create input {
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  padding: 0 0.75rem;
+  background: #fff;
+  color: var(--text);
+}
+
+.board-create-list,
+.task-quick-create {
+  display: grid;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.board-create-list button,
+.task-quick-create button {
+  height: 40px;
+  border-radius: 10px;
+  border: none;
+  background: var(--primary);
+  color: #101010;
+  font-weight: 700;
+  padding: 0 0.9rem;
+  cursor: pointer;
+  width: 100%;
+}
+
+.board-toolbar-controls select,
+.board-create-list input,
+.task-quick-create input {
+  width: 100%;
+}
+
+.board-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.9rem;
+}
+
+.board-column {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.board-column.over {
+  border-color: #f7b546;
+  box-shadow: 0 0 0 2px rgba(252, 163, 17, 0.2);
+}
+
+.board-column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.board-column-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.board-column-header span {
+  min-width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  display: inline-grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.task-stack {
+  display: grid;
+  gap: 0.55rem;
+  min-height: 16px;
+}
+
+.task-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.7rem 0.75rem;
+  cursor: grab;
+  box-shadow: 0 6px 20px rgba(20, 33, 61, 0.06);
+}
+
+.task-card p {
+  margin: 0;
+}
+
+.task-card.dragging {
+  cursor: grabbing;
+  opacity: 0.7;
+}
+
 .mobile-nav {
   display: none;
 }

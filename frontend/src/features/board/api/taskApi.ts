@@ -8,7 +8,7 @@ export type CreateTaskPayload = {
   listId: string;
   position?: number;
   dueDate?: string;
-  assigneeId?: string;
+  assignedTo?: string;
 };
 
 export const taskApi = {
@@ -28,8 +28,12 @@ export const taskApi = {
     const response = await http.put<Task>(`/tasks/${taskId}/move`, payload);
     return response.data;
   },
-  reorder: async (listId: string, taskIdsInOrder: string[]) => {
-    const response = await http.put<Task[]>("/tasks/reorder", { listId, taskIdsInOrder });
+  reorder: async (groupId: string, listId: string, taskIds: string[]) => {
+    const response = await http.put<Task[]>("/tasks/reorder", { groupId, listId, taskIds });
+    return response.data;
+  },
+  updatePosition: async (taskId: string, payload: { listId: string; position: number }) => {
+    const response = await http.patch<Task>(`/tasks/${taskId}/position`, payload);
     return response.data;
   },
 };
