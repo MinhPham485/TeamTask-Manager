@@ -11,6 +11,13 @@ export type CreateTaskPayload = {
   assignedTo?: string;
 };
 
+export type UpdateTaskPayload = {
+  title?: string;
+  description?: string;
+  dueDate?: string | null;
+  assignedTo?: string | null;
+};
+
 export const taskApi = {
   getByGroup: async (groupId: string) => {
     const response = await http.get<Task[]>(`/tasks/group/${groupId}`);
@@ -20,7 +27,7 @@ export const taskApi = {
     const response = await http.post<Task>("/tasks", payload);
     return response.data;
   },
-  update: async (taskId: string, payload: Partial<Omit<Task, "id">>) => {
+  update: async (taskId: string, payload: UpdateTaskPayload) => {
     const response = await http.put<Task>(`/tasks/${taskId}`, payload);
     return response.data;
   },
@@ -34,6 +41,10 @@ export const taskApi = {
   },
   updatePosition: async (taskId: string, payload: { listId: string; position: number }) => {
     const response = await http.patch<Task>(`/tasks/${taskId}/position`, payload);
+    return response.data;
+  },
+  assignLabels: async (taskId: string, labelIds: string[]) => {
+    const response = await http.put<Task>(`/tasks/${taskId}/labels`, { labelIds });
     return response.data;
   },
 };

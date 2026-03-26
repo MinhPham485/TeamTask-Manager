@@ -6,11 +6,11 @@ export const checklistApi = {
     const response = await http.get<ChecklistItem[]>(`/checklists/task/${taskId}`);
     return response.data;
   },
-  create: async (payload: Pick<ChecklistItem, "taskId" | "content">) => {
+  create: async (payload: Pick<ChecklistItem, "taskId" | "title">) => {
     const response = await http.post<ChecklistItem>("/checklists", payload);
     return response.data;
   },
-  update: async (itemId: string, payload: Partial<Pick<ChecklistItem, "content" | "position" | "isCompleted">>) => {
+  update: async (itemId: string, payload: Partial<Pick<ChecklistItem, "title" | "position" | "isCompleted">>) => {
     const response = await http.put<ChecklistItem>(`/checklists/${itemId}`, payload);
     return response.data;
   },
@@ -18,8 +18,8 @@ export const checklistApi = {
     const response = await http.patch<ChecklistItem>(`/checklists/${itemId}/toggle`, { isCompleted });
     return response.data;
   },
-  reorder: async (taskId: string, itemIdsInOrder: string[]) => {
-    const response = await http.put<ChecklistItem[]>("/checklists/reorder", { taskId, itemIdsInOrder });
+  reorder: async (taskId: string, itemIds: string[]) => {
+    const response = await http.put<ChecklistItem[]>("/checklists/reorder", { taskId, itemIds });
     return response.data;
   },
   remove: async (itemId: string) => {

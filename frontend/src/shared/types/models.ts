@@ -55,6 +55,8 @@ export type Task = {
   groupId: string;
   assigneeId?: string | null;
   position: number;
+  assignee?: User | null;
+  taskLabels?: Array<{ label: Label }>;
 };
 
 export type Label = {
@@ -67,7 +69,7 @@ export type Label = {
 export type ChecklistItem = {
   id: string;
   taskId: string;
-  content: string;
+  title: string;
   isCompleted: boolean;
   position: number;
 };
