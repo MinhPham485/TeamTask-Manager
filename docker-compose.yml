@@ -2,16 +2,18 @@ services:
   db:
     image: postgres:16-alpine
     container_name: teamtask-db
+    env_file:
+      - .env.docker
     environment:
-      POSTGRES_DB: teamtask
-      POSTGRES_USER: teamtask
-      POSTGRES_PASSWORD: teamtaskpw
+      POSTGRES_DB: ${POSTGRES_DB:-teamtask}
+      POSTGRES_USER: ${POSTGRES_USER:-teamtask}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-teamtaskpw}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U teamtask -d teamtask"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-teamtask} -d ${POSTGRES_DB:-teamtask}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -21,15 +23,17 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: teamtask-backend
+    env_file:
+      - .env.docker
     environment:
       PORT: 5000
-      JWT_SECRET: change-me-in-real-usage
-      DATABASE_URL: postgresql://teamtask:teamtaskpw@db:5432/teamtask?schema=public
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-real-usage}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-teamtask}:${POSTGRES_PASSWORD:-teamtaskpw}@db:5432/${POSTGRES_DB:-teamtask}?schema=public
     depends_on:
       db:
         condition: service_healthy
     ports:
-      - "5000:5000"
+      - "${DOCKER_BACKEND_PORT:-5001}:5000"
     restart: unless-stopped
 
   frontend:
@@ -37,9 +41,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: http://localhost:5000
-        VITE_SOCKET_URL: http://localhost:5000
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5001}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-http://localhost:5001}
     container_name: teamtask-frontend
+    env_file:
+      - .env.docker
     depends_on:
       - backend
     ports:

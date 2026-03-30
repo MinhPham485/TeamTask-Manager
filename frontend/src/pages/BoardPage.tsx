@@ -620,204 +620,210 @@ export function BoardPage() {
       ) : null}
 
       {currentGroupId && !listsQuery.isLoading && !tasksQuery.isLoading && !listsQuery.isError && !tasksQuery.isError ? (
-        <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-          <div className="board-columns">
-            {sortedLists.map((list) => (
-              <ListColumn
-                key={list.id}
-                list={list}
-                tasks={tasksByList[list.id] ?? []}
-                draftTitle={taskDraftByList[list.id] ?? ""}
-                onDraftTitleChange={(value) => setTaskDraftByList((prev) => ({ ...prev, [list.id]: value }))}
-                onCreateTask={onCreateTask(list.id)}
-                selectedTaskId={selectedTaskId}
-                onSelectTask={setSelectedTaskId}
-              />
-            ))}
-          </div>
-        </DndContext>
-      ) : null}
+          <section className="board-workspace">
+            <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+              <div className="board-columns">
+                {sortedLists.map((list) => (
+                  <ListColumn
+                    key={list.id}
+                    list={list}
+                    tasks={tasksByList[list.id] ?? []}
+                    draftTitle={taskDraftByList[list.id] ?? ""}
+                    onDraftTitleChange={(value) => setTaskDraftByList((prev) => ({ ...prev, [list.id]: value }))}
+                    onCreateTask={onCreateTask(list.id)}
+                    selectedTaskId={selectedTaskId}
+                    onSelectTask={setSelectedTaskId}
+                  />
+                ))}
+              </div>
+            </DndContext>
 
-      {selectedTask ? (
-        <section className="page-card task-detail-panel">
-          <header className="task-detail-header">
-            <h3>Task Detail</h3>
-            <p className="muted-text">{selectedTask.title}</p>
-          </header>
+            {selectedTask ? (
+              <section className="page-card task-detail-panel">
+                <header className="task-detail-header">
+                  <h3>Task Detail</h3>
+                  <p className="muted-text">{selectedTask.title}</p>
+                </header>
 
-          <form className="task-detail-form" onSubmit={onSaveTaskDetails}>
-            <input value={taskTitleDraft} onChange={(event) => setTaskTitleDraft(event.target.value)} placeholder="Task title" />
-            <textarea
-              value={taskDescriptionDraft}
-              onChange={(event) => setTaskDescriptionDraft(event.target.value)}
-              placeholder="Task description"
-              rows={3}
-            />
+                <form className="task-detail-form" onSubmit={onSaveTaskDetails}>
+                  <input value={taskTitleDraft} onChange={(event) => setTaskTitleDraft(event.target.value)} placeholder="Task title" />
+                  <textarea
+                    value={taskDescriptionDraft}
+                    onChange={(event) => setTaskDescriptionDraft(event.target.value)}
+                    placeholder="Task description"
+                    rows={3}
+                  />
 
-            <div className="task-detail-grid">
-              <label>
-                Due date
-                <input
-                  type="datetime-local"
-                  value={taskDueDateDraft}
-                  onChange={(event) => setTaskDueDateDraft(event.target.value)}
-                />
-              </label>
+                  <div className="task-detail-grid">
+                    <label>
+                      Due date
+                      <input
+                        type="datetime-local"
+                        value={taskDueDateDraft}
+                        onChange={(event) => setTaskDueDateDraft(event.target.value)}
+                      />
+                    </label>
 
-              <label>
-                Assignee
-                <select value={taskAssigneeDraft} onChange={(event) => setTaskAssigneeDraft(event.target.value)}>
-                  <option value="">Unassigned</option>
-                  {(membersQuery.data ?? []).map((member) => (
-                    <option key={member.userId} value={member.userId}>
-                      {member.user?.username ?? member.userId}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+                    <label>
+                      Assignee
+                      <select value={taskAssigneeDraft} onChange={(event) => setTaskAssigneeDraft(event.target.value)}>
+                        <option value="">Unassigned</option>
+                        {(membersQuery.data ?? []).map((member) => (
+                          <option key={member.userId} value={member.userId}>
+                            {member.user?.username ?? member.userId}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
 
-            <button type="submit" disabled={updateTaskMutation.isPending}>
-              {updateTaskMutation.isPending ? "Saving..." : "Save details"}
-            </button>
-          </form>
-
-          <section className="task-detail-section">
-            <h4>Labels</h4>
-            <form className="task-detail-inline" onSubmit={onCreateLabel}>
-              <input value={newLabelName} onChange={(event) => setNewLabelName(event.target.value)} placeholder="New label name" />
-              <input type="color" value={newLabelColor} onChange={(event) => setNewLabelColor(event.target.value)} />
-              <button type="submit" disabled={createLabelMutation.isPending}>
-                {createLabelMutation.isPending ? "Adding..." : "Add label"}
-              </button>
-            </form>
-
-            <form className="task-label-list" onSubmit={onApplyLabels}>
-              {(labelsQuery.data ?? []).map((label) => {
-                const checked = selectedLabelIds.includes(label.id);
-
-                return (
-                  <label key={label.id} className="task-label-item">
-                    <span className="task-label-pill" style={{ background: label.color }} />
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(event) => {
-                        setSelectedLabelIds((prev) => {
-                          if (event.target.checked) {
-                            return [...prev, label.id];
-                          }
-
-                          return prev.filter((id) => id !== label.id);
-                        });
-                      }}
-                    />
-                    <span>{label.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const renamed = window.prompt("Rename label", label.name);
-
-                        if (!renamed) {
-                          return;
-                        }
-
-                        const normalized = renamed.trim();
-
-                        if (!normalized) {
-                          return;
-                        }
-
-                        updateLabelMutation.mutate({
-                          labelId: label.id,
-                          name: normalized,
-                          color: label.color,
-                        });
-                      }}
-                      disabled={updateLabelMutation.isPending}
-                    >
-                      Rename
-                    </button>
-                    <button
-                      type="button"
-                      className="danger-button"
-                      onClick={() => deleteLabelMutation.mutate(label.id)}
-                      disabled={deleteLabelMutation.isPending}
-                    >
-                      Delete
-                    </button>
-                  </label>
-                );
-              })}
-
-              <button type="submit" disabled={assignLabelsMutation.isPending}>
-                {assignLabelsMutation.isPending ? "Applying..." : "Apply labels"}
-              </button>
-            </form>
-          </section>
-
-          <section className="task-detail-section">
-            <h4>Checklist</h4>
-            <form className="task-detail-inline" onSubmit={onCreateChecklist}>
-              <input
-                value={newChecklistTitle}
-                onChange={(event) => setNewChecklistTitle(event.target.value)}
-                placeholder="Checklist item"
-              />
-              <button type="submit" disabled={createChecklistMutation.isPending}>
-                {createChecklistMutation.isPending ? "Adding..." : "Add item"}
-              </button>
-            </form>
-
-            <div className="task-detail-list">
-              {(checklistQuery.data ?? []).map((item) => (
-                <div key={item.id} className="task-detail-list-item">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={item.isCompleted}
-                      onChange={() => toggleChecklistMutation.mutate({ itemId: item.id, isCompleted: !item.isCompleted })}
-                    />
-                    <span>{item.title}</span>
-                  </label>
-                  <button type="button" className="danger-button" onClick={() => deleteChecklistMutation.mutate(item.id)}>
-                    Remove
+                  <button type="submit" disabled={updateTaskMutation.isPending}>
+                    {updateTaskMutation.isPending ? "Saving..." : "Save details"}
                   </button>
-                </div>
-              ))}
-            </div>
-          </section>
+                </form>
 
-          <section className="task-detail-section">
-            <h4>Comments</h4>
-            <form className="task-detail-inline" onSubmit={onCreateComment}>
-              <input value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Write a comment" />
-              <button type="submit" disabled={createCommentMutation.isPending}>
-                {createCommentMutation.isPending ? "Posting..." : "Post"}
-              </button>
-            </form>
-
-            <div className="task-detail-list">
-              {(commentsQuery.data ?? []).map((comment) => (
-                <article key={comment.id} className="task-comment-item">
-                  <p>{comment.content}</p>
-                  <small className="muted-text">
-                    {comment.sender?.username ?? "Unknown"} • {new Date(comment.createdAt).toLocaleString()}
-                  </small>
-                  {comment.senderId === user?.id ? (
-                    <button
-                      type="button"
-                      className="danger-button"
-                      onClick={() => deleteCommentMutation.mutate(comment.id)}
-                    >
-                      Delete
+                <section className="task-detail-section">
+                  <h4>Labels</h4>
+                  <form className="task-detail-inline" onSubmit={onCreateLabel}>
+                    <input value={newLabelName} onChange={(event) => setNewLabelName(event.target.value)} placeholder="New label name" />
+                    <input type="color" value={newLabelColor} onChange={(event) => setNewLabelColor(event.target.value)} />
+                    <button type="submit" disabled={createLabelMutation.isPending}>
+                      {createLabelMutation.isPending ? "Adding..." : "Add label"}
                     </button>
-                  ) : null}
-                </article>
-              ))}
-            </div>
+                  </form>
+
+                  <form className="task-label-list" onSubmit={onApplyLabels}>
+                    {(labelsQuery.data ?? []).map((label) => {
+                      const checked = selectedLabelIds.includes(label.id);
+
+                      return (
+                        <label key={label.id} className="task-label-item">
+                          <span className="task-label-pill" style={{ background: label.color }} />
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => {
+                              setSelectedLabelIds((prev) => {
+                                if (event.target.checked) {
+                                  return [...prev, label.id];
+                                }
+
+                                return prev.filter((id) => id !== label.id);
+                              });
+                            }}
+                          />
+                          <span>{label.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const renamed = window.prompt("Rename label", label.name);
+
+                              if (!renamed) {
+                                return;
+                              }
+
+                              const normalized = renamed.trim();
+
+                              if (!normalized) {
+                                return;
+                              }
+
+                              updateLabelMutation.mutate({
+                                labelId: label.id,
+                                name: normalized,
+                                color: label.color,
+                              });
+                            }}
+                            disabled={updateLabelMutation.isPending}
+                          >
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            className="danger-button"
+                            onClick={() => deleteLabelMutation.mutate(label.id)}
+                            disabled={deleteLabelMutation.isPending}
+                          >
+                            Delete
+                          </button>
+                        </label>
+                      );
+                    })}
+
+                    <button type="submit" disabled={assignLabelsMutation.isPending}>
+                      {assignLabelsMutation.isPending ? "Applying..." : "Apply labels"}
+                    </button>
+                  </form>
+                </section>
+
+                <section className="task-detail-section">
+                  <h4>Checklist</h4>
+                  <form className="task-detail-inline" onSubmit={onCreateChecklist}>
+                    <input
+                      value={newChecklistTitle}
+                      onChange={(event) => setNewChecklistTitle(event.target.value)}
+                      placeholder="Checklist item"
+                    />
+                    <button type="submit" disabled={createChecklistMutation.isPending}>
+                      {createChecklistMutation.isPending ? "Adding..." : "Add item"}
+                    </button>
+                  </form>
+
+                  <div className="task-detail-list">
+                    {(checklistQuery.data ?? []).map((item) => (
+                      <div key={item.id} className="task-detail-list-item">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={item.isCompleted}
+                            onChange={() => toggleChecklistMutation.mutate({ itemId: item.id, isCompleted: !item.isCompleted })}
+                          />
+                          <span>{item.title}</span>
+                        </label>
+                        <button type="button" className="danger-button" onClick={() => deleteChecklistMutation.mutate(item.id)}>
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="task-detail-section">
+                  <h4>Comments</h4>
+                  <form className="task-detail-inline" onSubmit={onCreateComment}>
+                    <input value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Write a comment" />
+                    <button type="submit" disabled={createCommentMutation.isPending}>
+                      {createCommentMutation.isPending ? "Posting..." : "Post"}
+                    </button>
+                  </form>
+
+                  <div className="task-detail-list">
+                    {(commentsQuery.data ?? []).map((comment) => (
+                      <article key={comment.id} className="task-comment-item">
+                        <p>{comment.content}</p>
+                        <small className="muted-text">
+                          {comment.sender?.username ?? "Unknown"} • {new Date(comment.createdAt).toLocaleString()}
+                        </small>
+                        {comment.senderId === user?.id ? (
+                          <button
+                            type="button"
+                            className="danger-button"
+                            onClick={() => deleteCommentMutation.mutate(comment.id)}
+                          >
+                            Delete
+                          </button>
+                        ) : null}
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              </section>
+            ) : (
+              <section className="page-card task-detail-panel task-detail-empty">
+                <p className="muted-text">Select a task card to open detail panel.</p>
+              </section>
+            )}
           </section>
-        </section>
       ) : null}
 
       {activeTaskId ? <p className="muted-text">Moving task...</p> : null}
