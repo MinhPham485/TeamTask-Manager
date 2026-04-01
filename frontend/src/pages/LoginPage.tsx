@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import axios from "axios";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -43,8 +44,13 @@ export function LoginPage() {
       const profile = await authApi.profile();
       setSession({ token: loginResponse.token, user: profile });
       navigate("/dashboard", { replace: true });
-    } catch {
+    } catch (error) {
       clearSession();
+      if (axios.isAxiosError<{ error?: string }>(error)) {
+        setError(error.response?.data?.error ?? "Login failed. Check credentials and try again.");
+        return;
+      }
+
       setError("Login failed. Check credentials and try again.");
     }
   };
