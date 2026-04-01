@@ -467,6 +467,18 @@ a {
   margin-top: 0.35rem;
 }
 
+.task-card-delete {
+  margin-top: 0.45rem;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #f3c9c5;
+  background: #fff5f4;
+  color: #b42318;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 0.55rem;
+}
+
 .task-card.selected {
   border-color: #4c9aff;
   box-shadow: 0 0 0 2px rgba(76, 154, 255, 0.24);

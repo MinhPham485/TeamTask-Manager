@@ -51,11 +51,13 @@ export type Task = {
   title: string;
   description?: string | null;
   dueDate?: string | null;
+  createdAt?: string;
   listId: string;
   groupId: string;
   assigneeId?: string | null;
   position: number;
   assignee?: User | null;
+  creator?: User | null;
   taskLabels?: Array<{ label: Label }>;
 };
 

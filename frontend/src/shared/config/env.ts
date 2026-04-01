@@ -1,5 +1,5 @@
-const fallbackApiUrl = "http://localhost:5000";
-const fallbackSocketUrl = "http://localhost:5000";
+const fallbackApiUrl = "";
+const fallbackSocketUrl = "/socket.io";
 
 export const env = {
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? fallbackApiUrl,

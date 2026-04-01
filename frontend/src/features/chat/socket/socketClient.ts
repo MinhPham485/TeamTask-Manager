@@ -1,5 +1,4 @@
 import { io, Socket } from "socket.io-client";
-import { env } from "@/shared/config/env";
 import { authStore } from "@/features/auth/store/authStore";
 
 let socket: Socket | null = null;
@@ -9,7 +8,7 @@ export function getSocketClient() {
     return socket;
   }
 
-  socket = io(env.socketUrl, {
+  socket = io("/socket.io", {
     autoConnect: false,
     transports: ["websocket"],
     auth: {

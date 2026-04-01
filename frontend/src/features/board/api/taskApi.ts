@@ -43,6 +43,9 @@ export const taskApi = {
     const response = await http.patch<Task>(`/tasks/${taskId}/position`, payload);
     return response.data;
   },
+  remove: async (taskId: string) => {
+    await http.delete(`/tasks/${taskId}`);
+  },
   assignLabels: async (taskId: string, labelIds: string[]) => {
     const response = await http.put<Task>(`/tasks/${taskId}/labels`, { labelIds });
     return response.data;
