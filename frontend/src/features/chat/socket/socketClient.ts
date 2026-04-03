@@ -1,5 +1,6 @@
 import { io, Socket } from "socket.io-client";
 import { authStore } from "@/features/auth/store/authStore";
+import { env } from "@/shared/config/env";
 
 let socket: Socket | null = null;
 
@@ -8,9 +9,11 @@ export function getSocketClient() {
     return socket;
   }
 
-  socket = io("/socket.io", {
+  const socketUrl = env.socketUrl === "/socket.io" ? undefined : env.socketUrl;
+
+  socket = io(socketUrl, {
     autoConnect: false,
-    transports: ["websocket"],
+    path: "/socket.io",
     auth: {
       token: authStore.getState().token,
     },
