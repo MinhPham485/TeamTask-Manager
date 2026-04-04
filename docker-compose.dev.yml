@@ -1,16 +1,19 @@
 services:
   db:
+    extends:
+      file: docker-compose.yml
+      service: db
     ports:
       - "5432:5432"
     volumes:
       - pgdata-dev:/var/lib/postgresql/data
 
   backend:
+    extends:
+      file: docker-compose.yml
+      service: backend
     ports:
       - "${DOCKER_BACKEND_PORT:-5001}:5000"
-
-  frontend:
-    profiles: ["prod"]
 
   frontend-dev:
     image: node:20-alpine
@@ -26,9 +29,6 @@ services:
       - backend
     ports:
       - "5173:5173"
-
-  nginx:
-    profiles: ["prod"]
 
 volumes:
   pgdata-dev:
