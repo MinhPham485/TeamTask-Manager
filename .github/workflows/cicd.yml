@@ -75,7 +75,7 @@ jobs:
         run: npm ci --prefix frontend
 
       - name: Type check frontend
-        run: npx tsc -b frontend --pretty false
+        run: npm --prefix frontend exec tsc -- -b --pretty false
 
       - name: Build frontend
         run: npm run build --prefix frontend
