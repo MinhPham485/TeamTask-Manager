@@ -26,6 +26,22 @@ app.use('/api/checklists', checklistRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
 
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        service: 'backend',
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        service: 'backend',
+        timestamp: new Date().toISOString()
+    });
+});
+
 
 app.get('/', (req, res) => {
     res.json({ message: 'API in running' });

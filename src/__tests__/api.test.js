@@ -9,6 +9,24 @@ describe('API smoke tests', () => {
         expect(response.body).toEqual({ message: 'API in running' });
     });
 
+    test('GET /health should return backend status', async () => {
+        const response = await request(app).get('/health');
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body).toHaveProperty('status', 'ok');
+        expect(response.body).toHaveProperty('service', 'backend');
+        expect(response.body).toHaveProperty('timestamp');
+    });
+
+    test('GET /api/health should return backend status', async () => {
+        const response = await request(app).get('/api/health');
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body).toHaveProperty('status', 'ok');
+        expect(response.body).toHaveProperty('service', 'backend');
+        expect(response.body).toHaveProperty('timestamp');
+    });
+
     test('GET /api/auth/profile without token should return 401', async () => {
         const response = await request(app).get('/api/auth/profile');
 
