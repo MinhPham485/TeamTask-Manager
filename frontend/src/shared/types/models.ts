@@ -95,6 +95,26 @@ export type Message = {
   sender?: User;
 };
 
+export type DirectMessage = {
+  id: string;
+  threadId: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+  sender?: User;
+};
+
+export type DirectThread = {
+  id: string;
+  userAId: string;
+  userBId: string;
+  createdAt: string;
+  updatedAt: string;
+  userA?: User;
+  userB?: User;
+  messages?: DirectMessage[];
+};
+
 export type LoginResponse = {
   token: string;
 };

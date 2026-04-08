@@ -1,6 +1,13 @@
 const {PrismaClient} = require('@prisma/client');
 require('dotenv').config();
-const {ensureMembership, createGroupMessage} = require('../services/message_service');
+const {
+    ensureMembership,
+    createGroupMessage,
+    getOrCreateDirectThread,
+    listDirectThreads,
+    listDirectMessagesByThread,
+    createDirectMessage
+} = require('../services/message_service');
 
 const prisma = new PrismaClient();
 
@@ -101,6 +108,84 @@ exports.deleteMessage = async (req, res) => {
         }
 
         res.json({message: 'Message deleted successfully'});
+    } catch (error) {
+        res.status(500).json({error: error.message});
+    }
+};
+
+exports.getDirectThreads = async (req, res) => {
+    try {
+        const threads = await listDirectThreads({
+            prisma,
+            userId: req.user.userId
+        });
+
+        res.json(threads);
+    } catch (error) {
+        res.status(500).json({error: error.message});
+    }
+};
+
+exports.createOrGetDirectThread = async (req, res) => {
+    try {
+        const result = await getOrCreateDirectThread({
+            prisma,
+            userId: req.user.userId,
+            peerUserId: req.body?.peerUserId
+        });
+
+        if (result.error) {
+            return res.status(result.status).json({error: result.error});
+        }
+
+        res.status(201).json(result.thread);
+    } catch (error) {
+        res.status(500).json({error: error.message});
+    }
+};
+
+exports.getDirectMessagesByThread = async (req, res) => {
+    try {
+        const result = await listDirectMessagesByThread({
+            prisma,
+            userId: req.user.userId,
+            threadId: req.params.threadId
+        });
+
+        if (result.error) {
+            return res.status(result.status).json({error: result.error});
+        }
+
+        res.json(result.messages);
+    } catch (error) {
+        res.status(500).json({error: error.message});
+    }
+};
+
+exports.createDirectMessage = async (req, res) => {
+    try {
+        const result = await createDirectMessage({
+            prisma,
+            userId: req.user.userId,
+            threadId: req.body?.threadId,
+            recipientId: req.body?.recipientId,
+            content: req.body?.content
+        });
+
+        if (result.error) {
+            return res.status(result.status).json({error: result.error});
+        }
+
+        const io = req.app.get('io');
+
+        if (io) {
+            io.to(`direct:${result.threadId}`).emit('chat:direct-message:new', result.message);
+        }
+
+        res.status(201).json({
+            threadId: result.threadId,
+            message: result.message
+        });
     } catch (error) {
         res.status(500).json({error: error.message});
     }

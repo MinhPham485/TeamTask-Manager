@@ -1,15 +1,17 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { messageApi } from "@/features/chat/api/messageApi";
 import { disconnectSocketClient, getSocketClient, reconnectSocketAuthToken } from "@/features/chat/socket/socketClient";
 import { groupApi } from "@/features/groups/api/groupApi";
 import { authStore } from "@/features/auth/store/authStore";
 import { queryKeys } from "@/shared/query/queryKeys";
-import { Message } from "@/shared/types/models";
+import { DirectMessage, DirectThread, Message } from "@/shared/types/models";
 
 type AckResponse = {
   ok: boolean;
   error?: string;
+  threadId?: string;
+  message?: DirectMessage;
 };
 
 function formatTime(dateString: string) {
@@ -29,7 +31,9 @@ export function ChatPage() {
   const currentUser = authStore((state) => state.user);
   const token = authStore((state) => state.token);
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [groupMessages, setGroupMessages] = useState<Message[]>([]);
+  const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
+  const [directThreads, setDirectThreads] = useState<DirectThread[]>([]);
   const [draft, setDraft] = useState("");
   const [socketStatus, setSocketStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected");
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +41,7 @@ export function ChatPage() {
   const [chatMode, setChatMode] = useState<"group" | "direct">("group");
   const [directUserId, setDirectUserId] = useState<string | null>(null);
   const joinedGroupRef = useRef<string | null>(null);
+  const joinedDirectThreadRef = useRef<string | null>(null);
   const currentGroupRef = useRef<string | null>(currentGroupId);
   const messageListRef = useRef<HTMLDivElement | null>(null);
 
@@ -55,6 +60,28 @@ export function ChatPage() {
     queryKey: currentGroupId ? queryKeys.groups.members(currentGroupId) : ["groups", "members", "missing"],
     queryFn: () => groupApi.getMembers(currentGroupId as string),
     enabled: Boolean(currentGroupId),
+  });
+
+  const directThreadsQuery = useQuery({
+    queryKey: ["messages", "direct", "threads"],
+    queryFn: () => messageApi.getDirectThreads(),
+  });
+
+  const createDirectThreadMutation = useMutation({
+    mutationFn: (peerUserId: string) => messageApi.createOrGetDirectThread(peerUserId),
+    onSuccess: (thread) => {
+      setDirectThreads((prev) => {
+        const index = prev.findIndex((item) => item.id === thread.id);
+
+        if (index >= 0) {
+          const next = [...prev];
+          next[index] = thread;
+          return next;
+        }
+
+        return [thread, ...prev];
+      });
+    },
   });
 
   const groups = useMemo(() => {
@@ -86,8 +113,12 @@ export function ChatPage() {
   }, [currentGroupId]);
 
   useEffect(() => {
-    setMessages(messagesQuery.data ?? []);
+    setGroupMessages(messagesQuery.data ?? []);
   }, [messagesQuery.data, currentGroupId]);
+
+  useEffect(() => {
+    setDirectThreads(directThreadsQuery.data ?? []);
+  }, [directThreadsQuery.data]);
 
   useEffect(() => {
     setChatMode("group");
@@ -100,7 +131,7 @@ export function ChatPage() {
     }
 
     messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
-  }, [messages]);
+  }, [chatMode, groupMessages, directMessages]);
 
   useEffect(() => {
     const joinGroup = (groupId: string) => {
@@ -141,7 +172,7 @@ export function ChatPage() {
         return;
       }
 
-      setMessages((prev) => {
+      setGroupMessages((prev) => {
         if (prev.some((item) => item.id === message.id)) {
           return prev;
         }
@@ -155,7 +186,21 @@ export function ChatPage() {
         return;
       }
 
-      setMessages((prev) => prev.filter((message) => message.id !== payload.id));
+      setGroupMessages((prev) => prev.filter((message) => message.id !== payload.id));
+    };
+
+    const handleNewDirectMessage = (message: DirectMessage) => {
+      if (joinedDirectThreadRef.current && message.threadId !== joinedDirectThreadRef.current) {
+        return;
+      }
+
+      setDirectMessages((prev) => {
+        if (prev.some((item) => item.id === message.id)) {
+          return prev;
+        }
+
+        return [...prev, message];
+      });
     };
 
     reconnectSocketAuthToken();
@@ -167,6 +212,7 @@ export function ChatPage() {
     socket.on("connect_error", handleConnectError);
     socket.on("chat:message:new", handleNewMessage);
     socket.on("chat:message:deleted", handleDeletedMessage);
+    socket.on("chat:direct-message:new", handleNewDirectMessage);
 
     return () => {
       socket.off("connect", handleConnect);
@@ -174,6 +220,7 @@ export function ChatPage() {
       socket.off("connect_error", handleConnectError);
       socket.off("chat:message:new", handleNewMessage);
       socket.off("chat:message:deleted", handleDeletedMessage);
+      socket.off("chat:direct-message:new", handleNewDirectMessage);
       disconnectSocketClient();
     };
   }, [socket]);
@@ -206,11 +253,79 @@ export function ChatPage() {
     });
   }, [currentGroupId, socket]);
 
+  const activeDirectThread = useMemo(() => {
+    if (!directUserId || !currentUser?.id) {
+      return null;
+    }
+
+    return (
+      directThreads.find((thread) => {
+        const isParticipant =
+          (thread.userAId === currentUser.id && thread.userBId === directUserId) ||
+          (thread.userBId === currentUser.id && thread.userAId === directUserId);
+
+        return isParticipant;
+      }) ?? null
+    );
+  }, [currentUser?.id, directThreads, directUserId]);
+
+  const directMessagesQuery = useQuery({
+    queryKey: activeDirectThread ? ["messages", "direct", activeDirectThread.id] : ["messages", "direct", "missing"],
+    queryFn: () => messageApi.getDirectMessagesByThread(activeDirectThread!.id),
+    enabled: Boolean(activeDirectThread?.id),
+  });
+
+  useEffect(() => {
+    if (chatMode !== "direct") {
+      return;
+    }
+
+    if (!activeDirectThread?.id) {
+      setDirectMessages([]);
+      return;
+    }
+
+    setDirectMessages(directMessagesQuery.data ?? []);
+  }, [activeDirectThread?.id, chatMode, directMessagesQuery.data]);
+
+  useEffect(() => {
+    if (!socket.connected) {
+      return;
+    }
+
+    if (chatMode !== "direct" || !activeDirectThread?.id) {
+      if (joinedDirectThreadRef.current) {
+        socket.emit("chat:leave-direct", { threadId: joinedDirectThreadRef.current });
+        joinedDirectThreadRef.current = null;
+      }
+      return;
+    }
+
+    if (joinedDirectThreadRef.current && joinedDirectThreadRef.current !== activeDirectThread.id) {
+      socket.emit("chat:leave-direct", { threadId: joinedDirectThreadRef.current });
+    }
+
+    socket.emit("chat:join-direct", { threadId: activeDirectThread.id }, (response: AckResponse) => {
+      if (!response?.ok) {
+        setError(response?.error ?? "Could not join direct thread.");
+        return;
+      }
+
+      joinedDirectThreadRef.current = activeDirectThread.id;
+      setError(null);
+    });
+  }, [activeDirectThread?.id, chatMode, socket, socketStatus]);
+
   const handleSend = (event: FormEvent) => {
     event.preventDefault();
 
-    if (!currentGroupId) {
+    if (chatMode === "group" && !currentGroupId) {
       setError("Please select a group.");
+      return;
+    }
+
+    if (chatMode === "direct" && !directUserId) {
+      setError("Please select a user.");
       return;
     }
 
@@ -223,6 +338,39 @@ export function ChatPage() {
 
     if (!socket.connected) {
       setError("Socket is disconnected. Please wait for reconnect.");
+      return;
+    }
+
+    if (chatMode === "direct") {
+      socket.emit(
+        "chat:send-direct-message",
+        { threadId: activeDirectThread?.id, recipientId: directUserId, content: normalizedDraft },
+        (response: AckResponse) => {
+          if (!response?.ok) {
+            setError(response?.error ?? "Could not send direct message.");
+            return;
+          }
+
+          if (response.threadId && joinedDirectThreadRef.current !== response.threadId) {
+            socket.emit("chat:join-direct", { threadId: response.threadId });
+            joinedDirectThreadRef.current = response.threadId;
+          }
+
+          if (response.message) {
+            setDirectMessages((prev) => {
+              if (prev.some((item) => item.id === response.message?.id)) {
+                return prev;
+              }
+
+              return [...prev, response.message as DirectMessage];
+            });
+          }
+
+          setDraft("");
+          setError(null);
+        }
+      );
+
       return;
     }
 
@@ -241,7 +389,7 @@ export function ChatPage() {
     return name.trim().charAt(0).toUpperCase() || "#";
   };
 
-  const getSenderName = (message: Message) => {
+  const getSenderName = (message: { senderId: string; sender?: { username?: string } }) => {
     if (message.senderId === currentUser?.id) {
       return "You";
     }
@@ -263,17 +411,21 @@ export function ChatPage() {
     return directContacts.find((member) => member.userId === directUserId) ?? null;
   }, [directContacts, directUserId]);
 
-  const visibleMessages = useMemo(() => {
-    if (chatMode !== "direct" || !directUserId || !currentUser?.id) {
-      return messages;
+  const getDirectThreadByPeer = (peerUserId: string) => {
+    if (!currentUser?.id) {
+      return null;
     }
 
-    return messages.filter(
-      (message) =>
-        (message.senderId === currentUser.id && message.senderId !== directUserId) ||
-        message.senderId === directUserId
+    return (
+      directThreads.find(
+        (thread) =>
+          (thread.userAId === currentUser.id && thread.userBId === peerUserId) ||
+          (thread.userBId === currentUser.id && thread.userAId === peerUserId)
+      ) ?? null
     );
-  }, [chatMode, currentUser?.id, directUserId, messages]);
+  };
+
+  const visibleMessages = chatMode === "direct" ? directMessages : groupMessages;
 
   const threadTitle = chatMode === "direct" ? activeDirectContact?.user?.username ?? "Chat" : activeGroup?.group.name ?? "Group";
 
@@ -350,6 +502,10 @@ export function ChatPage() {
                     onClick={() => {
                       setChatMode("direct");
                       setDirectUserId(member.userId);
+
+                      if (!getDirectThreadByPeer(member.userId)) {
+                        createDirectThreadMutation.mutate(member.userId);
+                      }
                     }}
                   >
                     <span className="messenger-avatar">{getGroupInitial(username)}</span>
@@ -375,11 +531,16 @@ export function ChatPage() {
         </header>
 
         {error ? <p className="error-text page-feedback">{error}</p> : null}
-        {messagesQuery.isError ? <p className="error-text">Could not load message history.</p> : null}
+        {chatMode === "group" && messagesQuery.isError ? <p className="error-text">Could not load message history.</p> : null}
+        {chatMode === "direct" && directMessagesQuery.isError ? <p className="error-text">Could not load direct messages.</p> : null}
 
         <div className="messenger-message-list" ref={messageListRef}>
-          {messagesQuery.isLoading ? <p className="muted-text">Loading messages...</p> : null}
-          {!messagesQuery.isLoading && !messagesQuery.isError && messages.length === 0 ? (
+          {chatMode === "group" && messagesQuery.isLoading ? <p className="muted-text">Loading messages...</p> : null}
+          {chatMode === "direct" && directMessagesQuery.isLoading ? <p className="muted-text">Loading messages...</p> : null}
+          {chatMode === "group" && !messagesQuery.isLoading && !messagesQuery.isError && visibleMessages.length === 0 ? (
+            <p className="muted-text">No messages yet. Start the conversation.</p>
+          ) : null}
+          {chatMode === "direct" && !directMessagesQuery.isLoading && !directMessagesQuery.isError && visibleMessages.length === 0 ? (
             <p className="muted-text">No messages yet. Start the conversation.</p>
           ) : null}
 
@@ -404,11 +565,14 @@ export function ChatPage() {
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder={currentGroupId ? "Aa" : "Choose a group"}
+            placeholder="Aa"
             maxLength={2000}
-            disabled={!currentGroupId}
+            disabled={chatMode === "group" ? !currentGroupId : !directUserId}
           />
-          <button type="submit" disabled={!currentGroupId || socketStatus !== "connected"}>
+          <button
+            type="submit"
+            disabled={(chatMode === "group" ? !currentGroupId : !directUserId) || socketStatus !== "connected"}
+          >
             Send
           </button>
         </form>
