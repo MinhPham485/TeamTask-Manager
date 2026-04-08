@@ -6,8 +6,7 @@ import { disconnectSocketClient } from "@/features/chat/socket/socketClient";
 
 const navItems = [
   { to: "/dashboard", label: "Groups" },
-  { to: "/board", label: "Board" },
-  { to: "/chat", label: "Chat" },
+  { to: "/workspace", label: "Workspace" },
 ];
 
 export function AppShell({ children }: PropsWithChildren) {
@@ -43,7 +42,6 @@ export function AppShell({ children }: PropsWithChildren) {
         <header className="topbar">
           <h1>TeamTask Manager</h1>
           <div className="topbar-actions">
-            <span className="topbar-caption">Phase 4 group management ready</span>
             <button className="logout-button" onClick={handleLogout}>
               Logout
             </button>

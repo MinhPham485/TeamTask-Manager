@@ -4,8 +4,7 @@ import { AppShell } from "@/app/layouts/AppShell";
 import { LoginPage } from "@/pages/LoginPage";
 import { RegisterPage } from "@/pages/RegisterPage";
 import { DashboardPage } from "@/pages/DashboardPage";
-import { BoardPage } from "@/pages/BoardPage";
-import { ChatPage } from "@/pages/ChatPage";
+import { WorkspacePage } from "@/pages/WorkspacePage";
 import { GroupDetailPage } from "@/pages/GroupDetailPage";
 
 export function AppRouter() {
@@ -42,10 +41,18 @@ export function AppRouter() {
           }
         />
         <Route
+          path="/workspace"
+          element={
+            <AppShell>
+              <WorkspacePage />
+            </AppShell>
+          }
+        />
+        <Route
           path="/board"
           element={
             <AppShell>
-              <BoardPage />
+              <Navigate to="/workspace?tab=board" replace />
             </AppShell>
           }
         />
@@ -53,7 +60,7 @@ export function AppRouter() {
           path="/chat"
           element={
             <AppShell>
-              <ChatPage />
+              <Navigate to="/workspace?tab=chat" replace />
             </AppShell>
           }
         />

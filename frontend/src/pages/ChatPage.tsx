@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { messageApi } from "@/features/chat/api/messageApi";
 import { disconnectSocketClient, getSocketClient, reconnectSocketAuthToken } from "@/features/chat/socket/socketClient";
 import { groupApi } from "@/features/groups/api/groupApi";
@@ -34,6 +34,8 @@ export function ChatPage() {
   const [socketStatus, setSocketStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected");
   const [error, setError] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState("");
+  const [chatMode, setChatMode] = useState<"group" | "direct">("group");
+  const [directUserId, setDirectUserId] = useState<string | null>(null);
   const joinedGroupRef = useRef<string | null>(null);
   const currentGroupRef = useRef<string | null>(currentGroupId);
   const messageListRef = useRef<HTMLDivElement | null>(null);
@@ -49,14 +51,10 @@ export function ChatPage() {
     enabled: Boolean(currentGroupId),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (messageId: string) => messageApi.remove(messageId),
-    onSuccess: (_, messageId) => {
-      setMessages((prev) => prev.filter((message) => message.id !== messageId));
-    },
-    onError: () => {
-      setError("Could not delete message.");
-    },
+  const membersQuery = useQuery({
+    queryKey: currentGroupId ? queryKeys.groups.members(currentGroupId) : ["groups", "members", "missing"],
+    queryFn: () => groupApi.getMembers(currentGroupId as string),
+    enabled: Boolean(currentGroupId),
   });
 
   const groups = useMemo(() => {
@@ -90,6 +88,11 @@ export function ChatPage() {
   useEffect(() => {
     setMessages(messagesQuery.data ?? []);
   }, [messagesQuery.data, currentGroupId]);
+
+  useEffect(() => {
+    setChatMode("group");
+    setDirectUserId(null);
+  }, [currentGroupId]);
 
   useEffect(() => {
     if (!messageListRef.current) {
@@ -246,12 +249,39 @@ export function ChatPage() {
     return message.sender?.username ?? "Unknown";
   };
 
+  const directContacts = useMemo(() => {
+    return (membersQuery.data ?? [])
+      .filter((member) => member.userId !== currentUser?.id)
+      .sort((a, b) => (a.user?.username ?? "").localeCompare(b.user?.username ?? ""));
+  }, [membersQuery.data, currentUser?.id]);
+
+  const activeDirectContact = useMemo(() => {
+    if (!directUserId) {
+      return null;
+    }
+
+    return directContacts.find((member) => member.userId === directUserId) ?? null;
+  }, [directContacts, directUserId]);
+
+  const visibleMessages = useMemo(() => {
+    if (chatMode !== "direct" || !directUserId || !currentUser?.id) {
+      return messages;
+    }
+
+    return messages.filter(
+      (message) =>
+        (message.senderId === currentUser.id && message.senderId !== directUserId) ||
+        message.senderId === directUserId
+    );
+  }, [chatMode, currentUser?.id, directUserId, messages]);
+
+  const threadTitle = chatMode === "direct" ? activeDirectContact?.user?.username ?? "Chat" : activeGroup?.group.name ?? "Group";
+
   return (
     <section className="chat-page messenger-layout">
       <aside className="page-card messenger-sidebar">
         <div className="messenger-sidebar-header">
           <h2>Chats</h2>
-          <p className={socketStatus === "connected" ? "chat-status online" : "chat-status"}>Socket: {socketStatus}</p>
         </div>
 
         <input
@@ -286,15 +316,60 @@ export function ChatPage() {
             );
           })}
         </div>
+
+        <div className="chat-targets-grid">
+          <section className="chat-target-section">
+            <h3>Chat nhom</h3>
+            <button
+              type="button"
+              className={chatMode === "group" ? "messenger-room active" : "messenger-room"}
+              onClick={() => {
+                setChatMode("group");
+                setDirectUserId(null);
+              }}
+            >
+              <span className="messenger-avatar">#</span>
+              <span className="messenger-room-copy">
+                <strong>{activeGroup?.group.name ?? "Group"}</strong>
+              </span>
+            </button>
+          </section>
+
+          <section className="chat-target-section">
+            <h3>Chat ca nhan</h3>
+            <div className="chat-direct-list">
+              {directContacts.map((member) => {
+                const isActive = chatMode === "direct" && directUserId === member.userId;
+                const username = member.user?.username ?? "User";
+
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    className={isActive ? "messenger-room active" : "messenger-room"}
+                    onClick={() => {
+                      setChatMode("direct");
+                      setDirectUserId(member.userId);
+                    }}
+                  >
+                    <span className="messenger-avatar">{getGroupInitial(username)}</span>
+                    <span className="messenger-room-copy">
+                      <strong>{username}</strong>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </div>
       </aside>
 
       <section className="page-card messenger-thread">
         <header className="messenger-thread-header">
           <div className="messenger-thread-title">
-            <span className="messenger-avatar large">{getGroupInitial(activeGroup?.group.name ?? "Group")}</span>
+            <span className="messenger-avatar large">{getGroupInitial(threadTitle)}</span>
             <div>
-              <h3>{activeGroup?.group.name ?? "Select a group"}</h3>
-              <p className="muted-text">Realtime group conversation</p>
+              <h3>{threadTitle}</h3>
             </div>
           </div>
         </header>
@@ -308,27 +383,17 @@ export function ChatPage() {
             <p className="muted-text">No messages yet. Start the conversation.</p>
           ) : null}
 
-          {messages.map((message) => {
+          {visibleMessages.map((message) => {
             const isMine = message.senderId === currentUser?.id;
 
             return (
               <article key={message.id} className={isMine ? "messenger-message mine" : "messenger-message"}>
+                <p className={isMine ? "messenger-message-meta mine" : "messenger-message-meta"}>{formatTime(message.createdAt)}</p>
                 <div className={isMine ? "messenger-bubble mine" : "messenger-bubble"}>
                   <header>
                     <strong>{getSenderName(message)}</strong>
-                    <span className="muted-text">{formatTime(message.createdAt)}</span>
                   </header>
                   <p>{message.content}</p>
-                  {isMine ? (
-                    <button
-                      type="button"
-                      className="danger-button"
-                      disabled={deleteMutation.isPending}
-                      onClick={() => deleteMutation.mutate(message.id)}
-                    >
-                      Delete
-                    </button>
-                  ) : null}
                 </div>
               </article>
             );
@@ -339,7 +404,7 @@ export function ChatPage() {
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder={currentGroupId ? "Aa" : "Choose a group to chat"}
+            placeholder={currentGroupId ? "Aa" : "Choose a group"}
             maxLength={2000}
             disabled={!currentGroupId}
           />

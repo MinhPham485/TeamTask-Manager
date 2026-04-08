@@ -83,7 +83,6 @@ export function DashboardPage() {
       <div className="group-actions-grid">
         <form className="page-card form-card" onSubmit={onCreate}>
           <h2>Create Group</h2>
-          <p className="muted-text">Create a new group and become owner.</p>
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Group name" maxLength={80} />
           <button type="submit" disabled={createMutation.isPending}>
             {createMutation.isPending ? "Creating..." : "Create"}
@@ -92,7 +91,6 @@ export function DashboardPage() {
 
         <form className="page-card form-card" onSubmit={onJoin}>
           <h2>Join Group</h2>
-          <p className="muted-text">Paste group code from owner.</p>
           <input
             value={groupCode}
             onChange={(event) => setGroupCode(event.target.value)}
