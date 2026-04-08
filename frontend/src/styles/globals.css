@@ -823,9 +823,9 @@ a {
 
 .messenger-thread {
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 0.5rem;
-  min-height: 0;
+  min-height: calc(100vh - 180px);
   height: calc(100vh - 180px);
   padding: 0.65rem;
   overflow: hidden;
@@ -852,8 +852,10 @@ a {
 
 .messenger-message-list {
   display: grid;
+  align-content: start;
   gap: 0.45rem;
   min-height: 0;
+  max-height: 100%;
   overflow-y: auto;
   padding-right: 0.15rem;
 }
@@ -920,6 +922,11 @@ a {
 .messenger-composer {
   display: flex;
   gap: 0.55rem;
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--card);
   border-top: 1px solid var(--line);
   padding-top: 0.65rem;
 }
