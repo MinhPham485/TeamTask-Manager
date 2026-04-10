@@ -717,8 +717,21 @@ a {
 
 .messenger-sidebar {
   display: grid;
+  align-content: start;
+  grid-auto-rows: min-content;
   gap: 0.35rem;
   padding: 0 0.8rem 0.8rem;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-selector-panel {
+  display: grid;
+  gap: 0.55rem;
+  background: #eef3ff;
+  border: 1px solid #cfe0ff;
+  border-radius: 16px;
+  padding: 0.6rem;
   min-height: 0;
   overflow: hidden;
 }
@@ -758,6 +771,7 @@ a {
 .chat-target-section {
   display: grid;
   gap: 0.45rem;
+  min-height: 0;
 }
 
 .chat-target-section h3 {
@@ -770,6 +784,8 @@ a {
 .chat-direct-list {
   display: grid;
   gap: 0.35rem;
+  max-height: 100%;
+  overflow-y: auto;
 }
 
 .messenger-sidebar-header {
@@ -795,7 +811,7 @@ a {
 .messenger-room-list {
   display: grid;
   gap: 0.45rem;
-  max-height: 180px;
+  max-height: 100%;
   overflow-y: auto;
 }
 

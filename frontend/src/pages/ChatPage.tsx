@@ -436,96 +436,98 @@ export function ChatPage() {
           <h2>Chats</h2>
         </div>
 
-        <div className="chat-mode-switch" role="tablist" aria-label="Chat mode switch">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={chatMode === "group"}
-            className={chatMode === "group" ? "chat-mode-button active" : "chat-mode-button"}
-            onClick={() => {
-              setChatMode("group");
-              setDirectUserId(null);
-            }}
-          >
-            Chat nhom
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={chatMode === "direct"}
-            className={chatMode === "direct" ? "chat-mode-button active" : "chat-mode-button"}
-            onClick={() => setChatMode("direct")}
-          >
-            Chat ca nhan
-          </button>
+        <div className="chat-selector-panel">
+          <div className="chat-mode-switch" role="tablist" aria-label="Chat mode switch">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={chatMode === "group"}
+              className={chatMode === "group" ? "chat-mode-button active" : "chat-mode-button"}
+              onClick={() => {
+                setChatMode("group");
+                setDirectUserId(null);
+              }}
+            >
+              Chat nhom
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={chatMode === "direct"}
+              className={chatMode === "direct" ? "chat-mode-button active" : "chat-mode-button"}
+              onClick={() => setChatMode("direct")}
+            >
+              Chat ca nhan
+            </button>
+          </div>
+
+          {chatMode === "group" ? (
+            <section className="chat-target-section chat-target-section-group">
+              <h3>Danh sach nhom</h3>
+              <input
+                className="messenger-search"
+                value={groupFilter}
+                onChange={(event) => setGroupFilter(event.target.value)}
+                placeholder="Search groups"
+              />
+              <div className="messenger-room-list">
+                {groupsQuery.isLoading ? <p className="muted-text">Loading groups...</p> : null}
+                {!groupsQuery.isLoading && filteredGroups.length === 0 ? (
+                  <p className="muted-text">No matching groups.</p>
+                ) : null}
+
+                {filteredGroups.map((membership) => {
+                  const isActive = membership.group.id === currentGroupId;
+
+                  return (
+                    <button
+                      key={membership.group.id}
+                      type="button"
+                      className={isActive ? "messenger-room active" : "messenger-room"}
+                      onClick={() => setCurrentGroup(membership.group.id)}
+                    >
+                      <span className="messenger-avatar">{getGroupInitial(membership.group.name)}</span>
+                      <span className="messenger-room-copy">
+                        <strong>{membership.group.name}</strong>
+                        <small>{membership.role}</small>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : (
+            <section className="chat-target-section chat-target-section-direct">
+              <h3>Danh sach nguoi chat</h3>
+              <div className="chat-direct-list">
+                {directContacts.map((member) => {
+                  const isActive = directUserId === member.userId;
+                  const username = member.user?.username ?? "User";
+
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      className={isActive ? "messenger-room active" : "messenger-room"}
+                      onClick={() => {
+                        setDirectUserId(member.userId);
+
+                        if (!getDirectThreadByPeer(member.userId)) {
+                          createDirectThreadMutation.mutate(member.userId);
+                        }
+                      }}
+                    >
+                      <span className="messenger-avatar">{getGroupInitial(username)}</span>
+                      <span className="messenger-room-copy">
+                        <strong>{username}</strong>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </div>
-
-        {chatMode === "group" ? (
-          <section className="chat-target-section">
-            <h3>Danh sach nhom</h3>
-            <input
-              className="messenger-search"
-              value={groupFilter}
-              onChange={(event) => setGroupFilter(event.target.value)}
-              placeholder="Search groups"
-            />
-            <div className="messenger-room-list">
-              {groupsQuery.isLoading ? <p className="muted-text">Loading groups...</p> : null}
-              {!groupsQuery.isLoading && filteredGroups.length === 0 ? (
-                <p className="muted-text">No matching groups.</p>
-              ) : null}
-
-              {filteredGroups.map((membership) => {
-                const isActive = membership.group.id === currentGroupId;
-
-                return (
-                  <button
-                    key={membership.group.id}
-                    type="button"
-                    className={isActive ? "messenger-room active" : "messenger-room"}
-                    onClick={() => setCurrentGroup(membership.group.id)}
-                  >
-                    <span className="messenger-avatar">{getGroupInitial(membership.group.name)}</span>
-                    <span className="messenger-room-copy">
-                      <strong>{membership.group.name}</strong>
-                      <small>{membership.role}</small>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ) : (
-          <section className="chat-target-section">
-            <h3>Danh sach nguoi chat</h3>
-            <div className="chat-direct-list">
-              {directContacts.map((member) => {
-                const isActive = directUserId === member.userId;
-                const username = member.user?.username ?? "User";
-
-                return (
-                  <button
-                    key={member.id}
-                    type="button"
-                    className={isActive ? "messenger-room active" : "messenger-room"}
-                    onClick={() => {
-                      setDirectUserId(member.userId);
-
-                      if (!getDirectThreadByPeer(member.userId)) {
-                        createDirectThreadMutation.mutate(member.userId);
-                      }
-                    }}
-                  >
-                    <span className="messenger-avatar">{getGroupInitial(username)}</span>
-                    <span className="messenger-room-copy">
-                      <strong>{username}</strong>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        )}
       </aside>
 
       <section className="page-card messenger-thread">
