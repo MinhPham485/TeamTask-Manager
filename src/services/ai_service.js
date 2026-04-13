@@ -8,6 +8,11 @@ const isAiFeatureEnabled = () => {
     return value === 'true' || value === '1' || value === 'yes';
 };
 
+const canUseMockWithoutKey = () => {
+    const value = String(process.env.AI_ALLOW_MOCK_WHEN_NO_KEY || 'false').toLowerCase();
+    return value === 'true' || value === '1' || value === 'yes';
+};
+
 const extractAnswerText = (payload) => {
     if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
         return payload.output_text.trim();
@@ -33,19 +38,6 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
         };
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-
-    if (!apiKey) {
-        return {
-            error: {
-                code: 'AI_NOT_CONFIGURED',
-                message: 'OPENAI_API_KEY is not configured'
-            },
-            status: 503
-        };
-    }
-
-    const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
     const contextResult = await buildGroupContext({
         prisma,
         groupId
@@ -55,6 +47,41 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
         return {
             error: contextResult.error,
             status: contextResult.status
+        };
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+    const groupName = contextResult.data.groupName || 'this group';
+
+    if (!apiKey) {
+        if (!canUseMockWithoutKey()) {
+            return {
+                error: {
+                    code: 'AI_NOT_CONFIGURED',
+                    message: 'OPENAI_API_KEY is not configured'
+                },
+                status: 503
+            };
+        }
+
+        return {
+            data: {
+                answer: `Demo mode is enabled for ${groupName}. Your question was: "${question}". Add OPENAI_API_KEY to get real model responses.`,
+                suggestions: [
+                    'Set OPENAI_API_KEY in backend env',
+                    'Ask for overdue and unassigned tasks',
+                    'Ask for a short action plan for this week'
+                ],
+                meta: {
+                    groupId,
+                    userId,
+                    questionLength: question.length,
+                    source: 'mock-no-key',
+                    model: 'none'
+                }
+            },
+            status: 200
         };
     }
 
