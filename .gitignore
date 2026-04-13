@@ -2,3 +2,4 @@ node_modules
 .env
 .env.docker
 /generated/prisma
+docs/ai/PHASE0_CONTRACT.md
