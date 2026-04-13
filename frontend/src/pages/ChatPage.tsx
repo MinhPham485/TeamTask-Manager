@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { messageApi } from "@/features/chat/api/messageApi";
+import { aiApi } from "@/features/chat/api/aiApi";
 import { disconnectSocketClient, getSocketClient, reconnectSocketAuthToken } from "@/features/chat/socket/socketClient";
 import { groupApi } from "@/features/groups/api/groupApi";
 import { authStore } from "@/features/auth/store/authStore";
@@ -38,8 +39,11 @@ export function ChatPage() {
   const [socketStatus, setSocketStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected");
   const [error, setError] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState("");
-  const [chatMode, setChatMode] = useState<"group" | "direct">("group");
+  const [chatMode, setChatMode] = useState<"group" | "direct" | "ai">("group");
   const [directUserId, setDirectUserId] = useState<string | null>(null);
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const joinedGroupRef = useRef<string | null>(null);
   const joinedDirectThreadRef = useRef<string | null>(null);
   const currentGroupRef = useRef<string | null>(currentGroupId);
@@ -84,6 +88,21 @@ export function ChatPage() {
     },
   });
 
+  const askAiMutation = useMutation({
+    mutationFn: (question: string) => aiApi.askGroupAssistant({ groupId: currentGroupId as string, question }),
+    onSuccess: (data) => {
+      setAiAnswer(data.answer ?? "");
+      setAiError(null);
+    },
+    onError: (mutationError: unknown) => {
+      const message =
+        (mutationError as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ||
+        (mutationError as Error)?.message ||
+        "Could not get AI answer.";
+      setAiError(message);
+    },
+  });
+
   const groups = useMemo(() => {
     return [...(groupsQuery.data ?? [])].sort((a, b) => a.group.name.localeCompare(b.group.name));
   }, [groupsQuery.data]);
@@ -121,8 +140,8 @@ export function ChatPage() {
   }, [directThreadsQuery.data]);
 
   useEffect(() => {
-    setChatMode("group");
     setDirectUserId(null);
+    setAiError(null);
   }, [currentGroupId]);
 
   useEffect(() => {
@@ -319,6 +338,24 @@ export function ChatPage() {
   const handleSend = (event: FormEvent) => {
     event.preventDefault();
 
+    if (chatMode === "ai") {
+      if (!currentGroupId) {
+        setAiError("Please select a group.");
+        return;
+      }
+
+      const normalizedQuestion = aiQuestion.trim();
+
+      if (!normalizedQuestion) {
+        setAiError("Question is required.");
+        return;
+      }
+
+      askAiMutation.mutate(normalizedQuestion);
+      setAiError(null);
+      return;
+    }
+
     if (chatMode === "group" && !currentGroupId) {
       setError("Please select a group.");
       return;
@@ -459,16 +496,28 @@ export function ChatPage() {
             >
               Chat ca nhan
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={chatMode === "ai"}
+              className={chatMode === "ai" ? "chat-mode-button active" : "chat-mode-button"}
+              onClick={() => {
+                setChatMode("ai");
+                setDirectUserId(null);
+              }}
+            >
+              Tro ly AI
+            </button>
           </div>
 
-          {chatMode === "group" ? (
+          {chatMode !== "direct" ? (
             <section className="chat-target-section chat-target-section-group">
-              <h3>Danh sach nhom</h3>
+              <h3>{chatMode === "ai" ? "Nhom context AI" : "Danh sach nhom"}</h3>
               <input
                 className="messenger-search"
                 value={groupFilter}
                 onChange={(event) => setGroupFilter(event.target.value)}
-                placeholder="Search groups"
+                placeholder={chatMode === "ai" ? "Search context groups" : "Search groups"}
               />
               <div className="messenger-room-list">
                 {groupsQuery.isLoading ? <p className="muted-text">Loading groups...</p> : null}
@@ -545,6 +594,18 @@ export function ChatPage() {
         {chatMode === "direct" && directMessagesQuery.isError ? <p className="error-text">Could not load direct messages.</p> : null}
 
         <div className="messenger-message-list" ref={messageListRef}>
+          {chatMode === "ai" ? (
+            <section className="ai-assistant-panel">
+              <header className="ai-assistant-header">
+                <h4>AI Assistant</h4>
+                <p>{activeGroup?.group.name ?? "No group selected"}</p>
+              </header>
+              {aiError ? <p className="error-text">{aiError}</p> : null}
+              {askAiMutation.isPending ? <p className="muted-text">AI is thinking...</p> : null}
+              {aiAnswer ? <article className="ai-answer-card">{aiAnswer}</article> : <p className="muted-text ai-answer-empty">Submit a question to get an answer.</p>}
+            </section>
+          ) : null}
+
           {chatMode === "group" && messagesQuery.isLoading ? <p className="muted-text">Loading messages...</p> : null}
           {chatMode === "direct" && directMessagesQuery.isLoading ? <p className="muted-text">Loading messages...</p> : null}
           {chatMode === "group" && !messagesQuery.isLoading && !messagesQuery.isError && visibleMessages.length === 0 ? (
@@ -555,6 +616,10 @@ export function ChatPage() {
           ) : null}
 
           {visibleMessages.map((message) => {
+            if (chatMode === "ai") {
+              return null;
+            }
+
             const isMine = message.senderId === currentUser?.id;
 
             return (
@@ -573,17 +638,28 @@ export function ChatPage() {
 
         <form className="messenger-composer" onSubmit={handleSend}>
           <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Aa"
-            maxLength={2000}
-            disabled={chatMode === "group" ? !currentGroupId : !directUserId}
+            value={chatMode === "ai" ? aiQuestion : draft}
+            onChange={(event) => {
+              if (chatMode === "ai") {
+                setAiQuestion(event.target.value);
+                return;
+              }
+
+              setDraft(event.target.value);
+            }}
+            placeholder={chatMode === "ai" ? "Ask about your group tasks..." : "Aa"}
+            maxLength={chatMode === "ai" ? 800 : 2000}
+            disabled={chatMode === "group" ? !currentGroupId : chatMode === "direct" ? !directUserId : !currentGroupId}
           />
           <button
             type="submit"
-            disabled={(chatMode === "group" ? !currentGroupId : !directUserId) || socketStatus !== "connected"}
+            disabled={
+              chatMode === "ai"
+                ? !currentGroupId || askAiMutation.isPending
+                : (chatMode === "group" ? !currentGroupId : !directUserId) || socketStatus !== "connected"
+            }
           >
-            Send
+            {chatMode === "ai" ? (askAiMutation.isPending ? "Asking..." : "Ask AI") : "Send"}
           </button>
         </form>
       </section>
