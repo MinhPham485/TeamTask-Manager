@@ -14,17 +14,18 @@ const canUseMockWithoutKey = () => {
 };
 
 const extractAnswerText = (payload) => {
-    if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
-        return payload.output_text.trim();
+    const parts = payload?.candidates?.[0]?.content?.parts;
+
+    if (!Array.isArray(parts)) {
+        return null;
     }
 
-    const maybeText = payload?.output?.[0]?.content?.[0]?.text;
+    const text = parts
+        .map((part) => (typeof part?.text === 'string' ? part.text : ''))
+        .join('')
+        .trim();
 
-    if (typeof maybeText === 'string' && maybeText.trim()) {
-        return maybeText.trim();
-    }
-
-    return null;
+    return text || null;
 };
 
 const askGroupAssistant = async ({groupId, userId, question}) => {
@@ -50,8 +51,8 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
         };
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+    const apiKey = process.env.GEMINI_API_KEY;
+    const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
     const groupName = contextResult.data.groupName || 'this group';
 
     if (!apiKey) {
@@ -59,7 +60,7 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
             return {
                 error: {
                     code: 'AI_NOT_CONFIGURED',
-                    message: 'OPENAI_API_KEY is not configured'
+                    message: 'GEMINI_API_KEY is not configured'
                 },
                 status: 503
             };
@@ -67,9 +68,9 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
 
         return {
             data: {
-                answer: `Demo mode is enabled for ${groupName}. Your question was: "${question}". Add OPENAI_API_KEY to get real model responses.`,
+                answer: `Demo mode is enabled for ${groupName}. Your question was: "${question}". Add GEMINI_API_KEY to get real model responses.`,
                 suggestions: [
-                    'Set OPENAI_API_KEY in backend env',
+                    'Set GEMINI_API_KEY in backend env',
                     'Ask for overdue and unassigned tasks',
                     'Ask for a short action plan for this week'
                 ],
@@ -97,15 +98,23 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
     ].join('\n');
 
     try {
-        const response = await fetch('https://api.openai.com/v1/responses', {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${apiKey}`
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model,
-                input: prompt
+                contents: [
+                    {
+                        parts: [
+                            {
+                                text: prompt
+                            }
+                        ]
+                    }
+                ]
             })
         });
 
@@ -114,7 +123,7 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
             return {
                 error: {
                     code: 'AI_PROVIDER_ERROR',
-                    message: errorPayload?.error?.message || 'OpenAI request failed'
+                    message: errorPayload?.error?.message || 'Gemini request failed'
                 },
                 status: 502
             };
@@ -141,7 +150,7 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
                     groupId,
                     userId,
                     questionLength: question.length,
-                    source: 'openai',
+                    source: 'gemini',
                     model
                 }
             },
