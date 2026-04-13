@@ -1,3 +1,8 @@
+const {PrismaClient} = require('@prisma/client');
+const {buildGroupContext} = require('./context_service');
+
+const prisma = new PrismaClient();
+
 const isAiFeatureEnabled = () => {
     const value = String(process.env.AI_FEATURE_ENABLED || 'false').toLowerCase();
     return value === 'true' || value === '1' || value === 'yes';
@@ -41,11 +46,26 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
     }
 
     const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+    const contextResult = await buildGroupContext({
+        prisma,
+        groupId
+    });
+
+    if (contextResult.error) {
+        return {
+            error: contextResult.error,
+            status: contextResult.status
+        };
+    }
+
+    const contextText = contextResult.data.contextText;
 
     const prompt = [
         'You are TeamTask Assistant. Reply with concise and practical guidance.',
         `Group ID: ${groupId}`,
         `User ID: ${userId}`,
+        'Context from project data:',
+        contextText,
         `Question: ${question}`
     ].join('\n');
 
