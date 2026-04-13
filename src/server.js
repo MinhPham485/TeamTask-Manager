@@ -10,6 +10,7 @@ const labelRoutes = require('./routes/label_routes');
 const checklistRoutes = require('./routes/checklist_routes');
 const commentRoutes = require('./routes/comment_routes');
 const messageRoutes = require('./routes/message_routes');
+const aiRoutes = require('./routes/ai_routes');
 const registerChatSocket = require('./socket/chat_socket');
 
 const app = express();
@@ -25,6 +26,7 @@ app.use('/api/labels', labelRoutes);
 app.use('/api/checklists', checklistRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/ai', aiRoutes);
 
 app.get('/health', (req, res) => {
     res.status(200).json({

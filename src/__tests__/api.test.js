@@ -1,4 +1,5 @@
 const request = require('supertest');
+const jwt = require('jsonwebtoken');
 const app = require('../server');
 
 describe('API smoke tests', () => {
@@ -39,5 +40,30 @@ describe('API smoke tests', () => {
 
         expect(response.statusCode).toBe(401);
         expect(response.body).toHaveProperty('error');
+    });
+
+    test('POST /api/ai/group/:groupId/ask without token should return 401', async () => {
+        const response = await request(app)
+            .post('/api/ai/group/test-group-id/ask')
+            .send({question: 'Summarize tasks'});
+
+        expect(response.statusCode).toBe(401);
+        expect(response.body).toHaveProperty('error');
+    });
+
+    test('POST /api/ai/group/:groupId/ask with invalid question should return 400', async () => {
+        const token = jwt.sign(
+            {userId: 'test-user-id'},
+            process.env.JWT_SECRET || 'SECRET_KEY'
+        );
+
+        const response = await request(app)
+            .post('/api/ai/group/test-group-id/ask')
+            .set('Authorization', `Bearer ${token}`)
+            .send({question: '   '});
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body).toHaveProperty('error');
+        expect(response.body.error).toHaveProperty('code', 'INVALID_REQUEST');
     });
 });
