@@ -1,17 +1,15 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { aiApi } from "@/features/chat/api/aiApi";
-import { authStore } from "@/features/auth/store/authStore";
 
 export function FloatingAiChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [history, setHistory] = useState<Array<{ question: string; answer: string }>>([]);
   const [error, setError] = useState<string | null>(null);
-  const currentGroupId = authStore((state) => state.currentGroupId);
 
   const askMutation = useMutation({
-    mutationFn: (payload: { question: string; groupId?: string }) => aiApi.askAssistant(payload),
+    mutationFn: (payload: { question: string }) => aiApi.askAssistant(payload),
     onSuccess: (data) => {
       const normalizedQuestion = question.trim();
 
@@ -54,7 +52,6 @@ export function FloatingAiChat() {
 
     askMutation.mutate({
       question: normalized,
-      groupId: currentGroupId || undefined,
     });
   };
 

@@ -1,56 +1,85 @@
-const {askGroupAssistant} = require('../services/ai_service');
+const {askGroupAssistant, askGeneralAssistant} = require('../services/ai_service');
 const {PrismaClient} = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
-const resolveUserGroupId = async ({userId, requestedGroupId}) => {
-    if (requestedGroupId) {
-        const membership = await prisma.groupMember.findUnique({
-            where: {
-                userId_groupId: {
-                    userId,
-                    groupId: requestedGroupId
+const normalizeText = (value) => String(value || '').trim().toLowerCase();
+
+const resolveMentionedGroupId = ({question, memberships}) => {
+    const normalizedQuestion = normalizeText(question);
+
+    if (!normalizedQuestion) {
+        return null;
+    }
+
+    for (const membership of memberships) {
+        const groupCode = normalizeText(membership.group?.groupCode);
+
+        if (groupCode && normalizedQuestion.includes(groupCode)) {
+            return membership.groupId;
+        }
+    }
+
+    for (const membership of memberships) {
+        const groupName = normalizeText(membership.group?.name);
+
+        if (groupName && normalizedQuestion.includes(groupName)) {
+            return membership.groupId;
+        }
+    }
+
+    return null;
+};
+
+const resolveUserGroupId = async ({userId, requestedGroupId, question}) => {
+    const memberships = await prisma.groupMember.findMany({
+        where: {
+            userId
+        },
+        select: {
+            groupId: true,
+            group: {
+                select: {
+                    name: true,
+                    groupCode: true
                 }
-            },
-            select: {
-                groupId: true
             }
-        });
+        }
+    });
+
+    if (requestedGroupId) {
+        const membership = memberships.find((item) => item.groupId === requestedGroupId);
 
         if (membership?.groupId) {
             return membership.groupId;
         }
     }
 
-    const firstMembership = await prisma.groupMember.findFirst({
-        where: {
-            userId
-        },
-        orderBy: {
-            id: 'asc'
-        },
-        select: {
-            groupId: true
-        }
+    return resolveMentionedGroupId({
+        question,
+        memberships
     });
-
-    return firstMembership?.groupId || null;
 };
 
 exports.askAssistant = async (req, res) => {
     try {
         const groupId = await resolveUserGroupId({
             userId: req.user.userId,
-            requestedGroupId: req.body?.groupId || null
+            requestedGroupId: req.body?.groupId || null,
+            question: req.ai.question
         });
 
         if (!groupId) {
-            return res.status(400).json({
-                error: {
-                    code: 'GROUP_REQUIRED',
-                    message: 'You need to join at least one group before using AI assistant'
-                }
+            const result = await askGeneralAssistant({
+                userId: req.user.userId,
+                question: req.ai.question
             });
+
+            if (result.error) {
+                return res.status(result.status || 500).json({error: result.error});
+            }
+
+            return res.status(result.status || 200).json(result.data);
         }
 
         const result = await askGroupAssistant({
