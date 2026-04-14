@@ -743,7 +743,7 @@ a {
 
 .chat-mode-switch {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 0.35rem;
   margin-top: -0.9rem;
   background: #e8f0ff;
@@ -902,34 +902,6 @@ a {
   max-height: 100%;
   overflow-y: auto;
   padding-right: 0.15rem;
-}
-
-.ai-assistant-panel {
-  display: grid;
-  gap: 0.6rem;
-  align-content: start;
-}
-
-.ai-assistant-header h4 {
-  margin: 0;
-}
-
-.ai-assistant-header p {
-  margin: 0.2rem 0 0;
-  color: var(--muted);
-}
-
-.ai-answer-card {
-  background: #eef4ff;
-  border: 1px solid #cfe0ff;
-  border-radius: 12px;
-  padding: 0.75rem;
-  white-space: pre-wrap;
-  line-height: 1.5;
-}
-
-.ai-answer-empty {
-  padding: 0.6rem 0.2rem;
 }
 
 .messenger-message {
