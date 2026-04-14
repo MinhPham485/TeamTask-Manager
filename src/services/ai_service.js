@@ -25,6 +25,24 @@ const extractAnswerText = (payload) => {
     return text || null;
 };
 
+const isUnfinishedCountQuestion = (question) => {
+    const normalized = String(question || '').trim().toLowerCase();
+
+    if (!normalized) {
+        return false;
+    }
+
+    const asksHowMany = normalized.includes('bao nhieu') || normalized.includes('how many') || normalized.includes('so luong');
+    const asksUnfinished =
+        normalized.includes('chua xong') ||
+        normalized.includes('chua hoan thanh') ||
+        normalized.includes('not done') ||
+        normalized.includes('unfinished') ||
+        normalized.includes('pending');
+
+    return asksHowMany && asksUnfinished;
+};
+
 const askGroupAssistant = async ({groupId, userId, question}) => {
     if (!isAiFeatureEnabled()) {
         return {
@@ -84,9 +102,34 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
     }
 
     const contextText = contextResult.data.contextText;
+    const metrics = contextResult.data.metrics;
+    const unfinishedTaskTitles = (contextResult.data.tasks || [])
+        .filter((task) => !task.isDone)
+        .slice(0, 5)
+        .map((task) => task.title);
+
+    if (isUnfinishedCountQuestion(question)) {
+        const details = unfinishedTaskTitles.length ? ` Top: ${unfinishedTaskTitles.join(', ')}.` : '';
+
+        return {
+            data: {
+                answer: `Chua hoan thanh: ${metrics.unfinishedTasks}/${metrics.totalTasks} task.${details}`,
+                suggestions: [],
+                meta: {
+                    groupId,
+                    userId,
+                    questionLength: question.length,
+                    source: 'rule-based',
+                    model: 'none'
+                }
+            },
+            status: 200
+        };
+    }
 
     const prompt = [
-        'You are TeamTask Assistant. Reply with concise and practical guidance.',
+        'You are TeamTask Assistant.',
+        'Rules: answer in max 3 short sentences, use exact numbers from context, do not guess, if missing data then say not enough data.',
         `Group ID: ${groupId}`,
         `User ID: ${userId}`,
         'Context from project data:',
