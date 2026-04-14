@@ -14,16 +14,13 @@ const canUseMockWithoutKey = () => {
 };
 
 const extractAnswerText = (payload) => {
-    const parts = payload?.candidates?.[0]?.content?.parts;
+    const content = payload?.choices?.[0]?.message?.content;
 
-    if (!Array.isArray(parts)) {
+    if (typeof content !== 'string') {
         return null;
     }
 
-    const text = parts
-        .map((part) => (typeof part?.text === 'string' ? part.text : ''))
-        .join('')
-        .trim();
+    const text = content.trim();
 
     return text || null;
 };
@@ -51,8 +48,8 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
         };
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+    const apiKey = process.env.GROQ_API_KEY;
+    const model = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
     const groupName = contextResult.data.groupName || 'this group';
 
     if (!apiKey) {
@@ -60,7 +57,7 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
             return {
                 error: {
                     code: 'AI_NOT_CONFIGURED',
-                    message: 'GEMINI_API_KEY is not configured'
+                    message: 'GROQ_API_KEY is not configured'
                 },
                 status: 503
             };
@@ -68,9 +65,9 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
 
         return {
             data: {
-                answer: `Demo mode is enabled for ${groupName}. Your question was: "${question}". Add GEMINI_API_KEY to get real model responses.`,
+                answer: `Demo mode is enabled for ${groupName}. Your question was: "${question}". Add GROQ_API_KEY to get real model responses.`,
                 suggestions: [
-                    'Set GEMINI_API_KEY in backend env',
+                    'Set GROQ_API_KEY in backend env',
                     'Ask for overdue and unassigned tasks',
                     'Ask for a short action plan for this week'
                 ],
@@ -98,21 +95,22 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
     ].join('\n');
 
     try {
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
-        const response = await fetch(endpoint, {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                contents: [
+                model,
+                messages: [
                     {
-                        parts: [
-                            {
-                                text: prompt
-                            }
-                        ]
+                        role: 'system',
+                        content: 'You are TeamTask Assistant. Reply with concise and practical guidance.'
+                    },
+                    {
+                        role: 'user',
+                        content: prompt
                     }
                 ]
             })
@@ -123,7 +121,7 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
             return {
                 error: {
                     code: 'AI_PROVIDER_ERROR',
-                    message: errorPayload?.error?.message || 'Gemini request failed'
+                    message: errorPayload?.error?.message || 'Groq request failed'
                 },
                 status: 502
             };
@@ -150,7 +148,7 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
                     groupId,
                     userId,
                     questionLength: question.length,
-                    source: 'gemini',
+                    source: 'groq',
                     model
                 }
             },
