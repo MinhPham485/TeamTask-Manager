@@ -51,6 +51,15 @@ describe('API smoke tests', () => {
         expect(response.body).toHaveProperty('error');
     });
 
+    test('POST /api/ai/ask without token should return 401', async () => {
+        const response = await request(app)
+            .post('/api/ai/ask')
+            .send({question: 'How many unfinished tasks?'});
+
+        expect(response.statusCode).toBe(401);
+        expect(response.body).toHaveProperty('error');
+    });
+
     test('POST /api/ai/group/:groupId/ask with invalid question should return 400', async () => {
         const token = jwt.sign(
             {userId: 'test-user-id'},

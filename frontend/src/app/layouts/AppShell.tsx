@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { authStore } from "@/features/auth/store/authStore";
 import { disconnectSocketClient } from "@/features/chat/socket/socketClient";
+import { FloatingAiChat } from "@/features/chat/components/FloatingAiChat";
 
 const navItems = [
   { to: "/dashboard", label: "Groups" },
@@ -60,6 +61,8 @@ export function AppShell({ children }: PropsWithChildren) {
           );
         })}
       </nav>
+
+      <FloatingAiChat />
     </div>
   );
 }

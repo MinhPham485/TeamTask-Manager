@@ -18,6 +18,10 @@ type AskGroupAssistantResponse = {
 };
 
 export const aiApi = {
+  askAssistant: async (payload: { question: string; groupId?: string }) => {
+    const response = await http.post<AskGroupAssistantResponse>("/ai/ask", payload);
+    return response.data;
+  },
   askGroupAssistant: async ({ groupId, question }: AskGroupAssistantPayload) => {
     const response = await http.post<AskGroupAssistantResponse>(`/ai/group/${groupId}/ask`, {
       question,
