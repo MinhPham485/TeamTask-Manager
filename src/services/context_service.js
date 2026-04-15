@@ -32,9 +32,15 @@ const buildGroupContext = async ({prisma, groupId, taskLimit = DEFAULT_TASK_LIMI
                 select: {
                     id: true,
                     title: true,
+                    description: true,
                     dueDate: true,
                     assignedTo: true,
                     assignee: {
+                        select: {
+                            username: true
+                        }
+                    },
+                    creator: {
                         select: {
                             username: true
                         }
@@ -61,18 +67,23 @@ const buildGroupContext = async ({prisma, groupId, taskLimit = DEFAULT_TASK_LIMI
 
     const taskLines = group.tasks.map((task) => {
         const assignee = task.assignee?.username || 'unassigned';
+        const creator = task.creator?.username || 'unknown';
         const listName = task.list?.name || 'unknown';
+        const description = task.description?.trim() || 'none';
 
-        return `- [${listName}] ${task.title} | assignee: ${assignee} | due: ${formatDate(task.dueDate)}`;
+        return `- [${listName}] ${task.title} | assignee: ${assignee} | creator: ${creator} | due: ${formatDate(task.dueDate)} | description: ${description}`;
     });
 
     const tasksWithStatus = group.tasks.map((task) => {
         const listName = task.list?.name || 'unknown';
 
         return {
+            id: task.id,
             title: task.title,
+            description: task.description?.trim() || null,
             listName,
             assignee: task.assignee?.username || 'unassigned',
+            creator: task.creator?.username || 'unknown',
             dueDate: formatDate(task.dueDate),
             isDone: isDoneList(listName)
         };

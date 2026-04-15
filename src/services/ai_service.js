@@ -127,6 +127,131 @@ const isUnfinishedCountQuestion = (question) => {
     return asksHowMany && asksUnfinished;
 };
 
+const normalizeText = (value) => {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+};
+
+const pickReferencedTask = (question, tasks = []) => {
+    const normalizedQuestion = normalizeText(question);
+
+    if (!normalizedQuestion || tasks.length === 0) {
+        return null;
+    }
+
+    const exactMatch = tasks.find((task) => {
+        const normalizedTitle = normalizeText(task.title);
+        return normalizedTitle && normalizedQuestion.includes(normalizedTitle);
+    });
+
+    if (exactMatch) {
+        return exactMatch;
+    }
+
+    const asksThisTask =
+        normalizedQuestion.includes('task nay') ||
+        normalizedQuestion.includes('task nay la') ||
+        normalizedQuestion.includes('task nay ai') ||
+        normalizedQuestion.includes('this task');
+
+    if (asksThisTask && tasks.length === 1) {
+        return tasks[0];
+    }
+
+    return null;
+};
+
+const asksTaskAssignee = (question) => {
+    const normalizedQuestion = normalizeText(question);
+
+    return (
+        normalizedQuestion.includes('ai lam') ||
+        normalizedQuestion.includes('nguoi lam') ||
+        normalizedQuestion.includes('who is assigned') ||
+        normalizedQuestion.includes('assignee')
+    );
+};
+
+const asksTaskDescription = (question) => {
+    const normalizedQuestion = normalizeText(question);
+
+    return normalizedQuestion.includes('mo ta') || normalizedQuestion.includes('description');
+};
+
+const asksTaskCreator = (question) => {
+    const normalizedQuestion = normalizeText(question);
+
+    return (
+        normalizedQuestion.includes('nguoi tao') ||
+        normalizedQuestion.includes('created by') ||
+        normalizedQuestion.includes('creator')
+    );
+};
+
+const buildTaskDetailAnswer = ({question, tasks, groupId, userId}) => {
+    const needsAssignee = asksTaskAssignee(question);
+    const needsDescription = asksTaskDescription(question);
+    const needsCreator = asksTaskCreator(question);
+
+    if (!needsAssignee && !needsDescription && !needsCreator) {
+        return null;
+    }
+
+    const referencedTask = pickReferencedTask(question, tasks);
+
+    if (!referencedTask) {
+        const suggestions = tasks.slice(0, 5).map((task) => task.title).join(', ');
+        return {
+            data: {
+                answer: suggestions
+                    ? `Khong xac dinh duoc task cu the. Thu ghi ro ten task, vi du: ${suggestions}.`
+                    : 'Khong co task de doi chieu. Hay tao task hoac chi ro group/task can hoi.',
+                suggestions: [],
+                meta: {
+                    groupId,
+                    userId,
+                    questionLength: question.length,
+                    source: 'rule-based-task-detail',
+                    model: 'none'
+                }
+            },
+            status: 200
+        };
+    }
+
+    const chunks = [];
+
+    if (needsAssignee) {
+        chunks.push(`Nguoi lam "${referencedTask.title}": ${referencedTask.assignee || 'unassigned'}.`);
+    }
+
+    if (needsDescription) {
+        chunks.push(`Mo ta "${referencedTask.title}": ${referencedTask.description || 'Khong co mo ta'}.`);
+    }
+
+    if (needsCreator) {
+        chunks.push(`Nguoi tao "${referencedTask.title}": ${referencedTask.creator || 'unknown'}.`);
+    }
+
+    return {
+        data: {
+            answer: chunks.join(' '),
+            suggestions: [],
+            meta: {
+                groupId,
+                userId,
+                questionLength: question.length,
+                source: 'rule-based-task-detail',
+                model: 'none'
+            }
+        },
+        status: 200
+    };
+};
+
 const askGroupAssistant = async ({groupId, userId, question}) => {
     if (!isAiFeatureEnabled()) {
         return {
@@ -179,6 +304,17 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
         .filter((task) => !task.isDone)
         .slice(0, 5)
         .map((task) => task.title);
+
+    const taskDetailResult = buildTaskDetailAnswer({
+        question,
+        tasks: contextResult.data.tasks || [],
+        groupId,
+        userId
+    });
+
+    if (taskDetailResult) {
+        return taskDetailResult;
+    }
 
     if (isUnfinishedCountQuestion(question)) {
         const details = unfinishedTaskTitles.length ? ` Top: ${unfinishedTaskTitles.join(', ')}.` : '';

@@ -55,10 +55,16 @@ const resolveUserGroupId = async ({userId, requestedGroupId, question}) => {
         }
     }
 
-    return resolveMentionedGroupId({
+    const mentionedGroupId = resolveMentionedGroupId({
         question,
         memberships
     });
+
+    if (mentionedGroupId) {
+        return mentionedGroupId;
+    }
+
+    return memberships[0]?.groupId || null;
 };
 
 exports.askAssistant = async (req, res) => {
