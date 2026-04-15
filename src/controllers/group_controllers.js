@@ -27,17 +27,17 @@ exports.createGroup = async (req, res) => {
             await transaction.list.createMany({
                 data: [
                     {
-                        name: 'Can lam',
+                        name: 'To Do',
                         position: 0,
                         groupId: createdGroup.id
                     },
                     {
-                        name: 'Dang lam',
+                        name: 'In Progress',
                         position: 1,
                         groupId: createdGroup.id
                     },
                     {
-                        name: 'Da xong',
+                        name: 'Done',
                         position: 2,
                         groupId: createdGroup.id
                     }

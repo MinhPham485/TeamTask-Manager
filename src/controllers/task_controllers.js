@@ -27,6 +27,13 @@ const getTaskWithAssignee = (taskId) => prisma.task.findUnique({
                 username: true,
                 email: true
             }
+        },
+        creator: {
+            select: {
+                id: true,
+                username: true,
+                email: true
+            }
         }
     }
 });
@@ -116,10 +123,18 @@ exports.createTask = async (req, res) => {
                 groupId,
                 listId: targetList.id,
                 position: (lastTask?.position ?? -1) + 1,
-                assignedTo
+                assignedTo,
+                createdBy: req.user.userId
             },
             include: {
                 assignee: {
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true
+                    }
+                },
+                creator: {
                     select: {
                         id: true,
                         username: true,
@@ -146,6 +161,13 @@ exports.getTasksByGroup = async (req, res) => {
                 ],
                 include: {
                     assignee: {
+                        select: {
+                            id: true,
+                            username: true,
+                            email: true
+                        }
+                    },
+                    creator: {
                         select: {
                             id: true,
                             username: true,
@@ -215,7 +237,23 @@ exports.updateTask = async (req, res) => {
 
         const task = await prisma.task.update({
             where: {id},
-            data: {title, description, assignedTo, dueDate}
+            data: {title, description, assignedTo, dueDate},
+            include: {
+                assignee: {
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true
+                    }
+                },
+                creator: {
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true
+                    }
+                }
+            }
         });
         res.json(task);
     }

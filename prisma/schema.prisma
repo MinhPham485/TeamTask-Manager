@@ -17,6 +17,7 @@ model User {
   groupsOwned Group[] @relation("GroupOwner")
   memberships GroupMember[]
   tasksAssigned Task[] @relation("TaskAssignee")
+  tasksCreated Task[] @relation("TaskCreator")
   messages Message[]
   directThreadsA DirectThread[] @relation("DirectThreadUserA")
   directThreadsB DirectThread[] @relation("DirectThreadUserB")
@@ -60,12 +61,14 @@ model Task {
   groupId     String
   listId      String
   assignedTo  String?
+  createdBy   String?
   dueDate     DateTime?
   createdAt   DateTime @default(now())
 
   group    Group @relation(fields: [groupId], references: [id])
   list     List  @relation(fields: [listId], references: [id])
   assignee User? @relation("TaskAssignee", fields: [assignedTo], references: [id])
+  creator  User? @relation("TaskCreator", fields: [createdBy], references: [id])
   taskLabels TaskLabel[]
   checklistItems ChecklistItem[]
   comments TaskComment[]
