@@ -10,6 +10,14 @@ const normalizeText = (value) => {
         .trim();
 };
 
+const sanitizeName = (value) => {
+    return String(value || '')
+        .trim()
+        .replace(/^[:\-\s"']+/, '')
+        .replace(/[.?!\s"']+$/, '')
+        .trim();
+};
+
 const toTitleCase = (value) => {
     return String(value || '')
         .split(' ')
@@ -17,6 +25,43 @@ const toTitleCase = (value) => {
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
         .join(' ')
         .trim();
+};
+
+const getQuestionCandidates = (question) => {
+    const full = String(question || '').trim();
+
+    if (!full) {
+        return [];
+    }
+
+    const lines = full
+        .split(/\r?\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+    return [full, ...lines];
+};
+
+const extractByRegex = (question, regexList) => {
+    const candidates = getQuestionCandidates(question);
+
+    for (const candidate of candidates) {
+        for (const regex of regexList) {
+            const match = candidate.match(regex);
+
+            if (!match?.[1]) {
+                continue;
+            }
+
+            const extracted = sanitizeName(match[1]);
+
+            if (extracted) {
+                return extracted;
+            }
+        }
+    }
+
+    return null;
 };
 
 const extractNameAfterMarker = (question, markers) => {
@@ -41,14 +86,18 @@ const extractNameAfterMarker = (question, markers) => {
 
 const parseCreateGroupIntent = (question) => {
     const normalized = normalizeText(question);
-    const asksCreate = normalized.includes('tao') || normalized.includes('create');
+    const asksCreate = normalized.includes('tao') || normalized.includes('create') || normalized.includes('them') || normalized.includes('add');
     const asksGroup = normalized.includes('nhom') || normalized.includes('group');
 
     if (!asksCreate || !asksGroup) {
         return null;
     }
 
-    const name = extractNameAfterMarker(question, [
+    const name = extractByRegex(question, [
+        /(?:ten|tên|named|name)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu,
+        /(?:tao|tạo|create|them|thêm|add)\s+(?:giup\s+toi\s+|giúp\s+tôi\s+)?(?:mot\s+|một\s+)?(?:nhom|nhóm|group)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu,
+        /(?:nhom|nhóm|group)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu
+    ]) || extractNameAfterMarker(question, [
         'ten ',
         'named ',
         'name '
@@ -76,7 +125,11 @@ const parseCreateListIntent = (question) => {
         return null;
     }
 
-    const name = extractNameAfterMarker(question, [
+    const name = extractByRegex(question, [
+        /(?:ten|tên|named|name)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu,
+        /(?:tao|tạo|create|them|thêm|add)\s+(?:mot\s+|một\s+)?(?:list|cot|cột|column)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu,
+        /(?:list|cot|cột|column)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu
+    ]) || extractNameAfterMarker(question, [
         'ten ',
         'named ',
         'name '
@@ -104,7 +157,11 @@ const parseCreateTaskIntent = (question) => {
         return null;
     }
 
-    const title = extractNameAfterMarker(question, [
+    const title = extractByRegex(question, [
+        /(?:ten|tên|title|named|name)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu,
+        /(?:tao|tạo|create|them|thêm|add)\s+(?:mot\s+|một\s+)?(?:task|cong\s+viec|công\s+việc)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu,
+        /(?:task|cong\s+viec|công\s+việc)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu
+    ]) || extractNameAfterMarker(question, [
         'ten ',
         'title ',
         'named ',

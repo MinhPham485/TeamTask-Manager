@@ -9,7 +9,10 @@ type AskGroupAssistantResponse = {
   answer: string;
   suggestions?: string[];
   meta?: {
+    action?: string;
     groupId?: string;
+    listId?: string;
+    taskId?: string;
     userId?: string;
     questionLength?: number;
     source?: string;

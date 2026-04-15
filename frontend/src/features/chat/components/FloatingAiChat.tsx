@@ -1,8 +1,12 @@
 import { FormEvent, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { aiApi } from "@/features/chat/api/aiApi";
+import { authStore } from "@/features/auth/store/authStore";
+import { queryKeys } from "@/shared/query/queryKeys";
 
 export function FloatingAiChat() {
+  const queryClient = useQueryClient();
+  const setCurrentGroup = authStore((state) => state.setCurrentGroup);
   const [isOpen, setIsOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [history, setHistory] = useState<Array<{ question: string; answer: string }>>([]);
@@ -10,11 +14,30 @@ export function FloatingAiChat() {
 
   const askMutation = useMutation({
     mutationFn: (payload: { question: string }) => aiApi.askAssistant(payload),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       const normalizedQuestion = question.trim();
 
       if (!normalizedQuestion) {
         return;
+      }
+
+      const action = data.meta?.action;
+      const groupId = data.meta?.groupId;
+
+      if (groupId) {
+        setCurrentGroup(groupId);
+      }
+
+      if (action === "create_group") {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.groups.all });
+      }
+
+      if (action === "create_list" && groupId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.board.lists(groupId) });
+      }
+
+      if (action === "create_task" && groupId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.board.tasks(groupId) });
       }
 
       setHistory((prev) => [
