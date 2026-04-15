@@ -1,4 +1,5 @@
 const {askGroupAssistant, askGeneralAssistant} = require('../services/ai_service');
+const {handleAiActionIntent} = require('../services/ai_action_service');
 const {PrismaClient} = require('@prisma/client');
 
 const prisma = new PrismaClient();
@@ -69,6 +70,20 @@ const resolveUserGroupId = async ({userId, requestedGroupId, question}) => {
 
 exports.askAssistant = async (req, res) => {
     try {
+        const actionResult = await handleAiActionIntent({
+            userId: req.user.userId,
+            question: req.ai.question,
+            requestedGroupId: req.body?.groupId || null
+        });
+
+        if (actionResult) {
+            if (actionResult.error) {
+                return res.status(actionResult.status || 500).json({error: actionResult.error});
+            }
+
+            return res.status(actionResult.status || 200).json(actionResult.data);
+        }
+
         const groupId = await resolveUserGroupId({
             userId: req.user.userId,
             requestedGroupId: req.body?.groupId || null,
