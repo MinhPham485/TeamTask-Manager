@@ -12,6 +12,8 @@ const commentRoutes = require('./routes/comment_routes');
 const messageRoutes = require('./routes/message_routes');
 const aiRoutes = require('./routes/ai_routes');
 const registerChatSocket = require('./socket/chat_socket');
+const { metricsMiddleware, metricsHandler } = require('./services/metrics_service');
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,6 +29,8 @@ app.use('/api/checklists', checklistRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/ai', aiRoutes);
+app.use(metricsMiddleware);
+
 
 app.get('/health', (req, res) => {
     res.status(200).json({
@@ -65,6 +69,8 @@ if (require.main === module) {
         console.log(`Server is running on port ${PORT}`);
     });
 }
+
+app.get('/metrics', metricsHandler);
 
 module.exports = app;
 

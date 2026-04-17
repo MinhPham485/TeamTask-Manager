@@ -30,5 +30,15 @@ services:
     ports:
       - "5173:5173"
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: teamtask-prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - backend
+    ports:
+      - "9090:9090"
+
 volumes:
   pgdata-dev:
