@@ -20,6 +20,7 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+app.use(metricsMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/tasks', taskRoutes);
@@ -29,7 +30,6 @@ app.use('/api/checklists', checklistRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/ai', aiRoutes);
-app.use(metricsMiddleware);
 
 
 app.get('/health', (req, res) => {
