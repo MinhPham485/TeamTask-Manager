@@ -3,7 +3,7 @@ This project includes a complete monitoring setup for backend and AI endpoints u
 The goal is to track API throughput, latency, and error rate in real time, and provide production-style visibility for troubleshooting and performance analysis.
 
 ## Monitoring Dashboard
-![Grafana Overview](docs/images/grafana-overview.png)
+![Grafana Overview]
 The dashboard tracks HTTP and AI throughput, error rate, and p95 latency in real time.
 <img width="1130" height="727" alt="image" src="https://github.com/user-attachments/assets/1eb69732-db6c-483d-be4a-3a857b41efd6" />
 
@@ -66,7 +66,7 @@ AI p95 Latency:
 histogram_quantile(0.95, sum by (le) (rate(teamtask_ai_request_duration_ms_bucket[$__rate_interval])))
 ### Reliability and Performance Panels
 
-![Error and Latency Panels](docs/images/grafana-error-latency.png)
+![Error and Latency Panels]
 <img width="1130" height="385" alt="image" src="https://github.com/user-attachments/assets/fcbcc606-815f-43d8-9b75-b2052d36b6c4" />
 
 Notes
