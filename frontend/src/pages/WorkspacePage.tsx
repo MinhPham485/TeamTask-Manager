@@ -38,7 +38,7 @@ export function WorkspacePage() {
             className={activeTab === "board" ? "workspace-tab active" : "workspace-tab"}
             onClick={() => switchTab("board")}
           >
-            Kanban Board
+             DashBoard
           </button>
         </div>
       </header>

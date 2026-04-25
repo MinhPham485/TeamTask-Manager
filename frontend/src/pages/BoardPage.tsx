@@ -444,7 +444,7 @@ export function BoardPage() {
   return (
     <section className="board-page">
       <header className="page-card board-toolbar">
-        <h2>Kanban Board</h2>
+        <h2> DashBoard</h2>
         <div className="board-toolbar-controls">
           <select
             value={currentGroupId ?? ""}
