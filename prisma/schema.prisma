@@ -13,6 +13,11 @@ model User {
   password  String
   role      Role     @default(User)
   createdAt DateTime @default(now())
+  passwordResetCodeHash String?
+  passwordResetExpiresAt DateTime?
+  passwordResetAttempts Int @default(0)
+  passwordResetResendAt DateTime?
+  passwordResetConsumedAt DateTime?
 
   groupsOwned Group[] @relation("GroupOwner")
   memberships GroupMember[]
