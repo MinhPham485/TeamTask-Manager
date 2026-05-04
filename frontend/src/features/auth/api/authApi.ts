@@ -12,6 +12,16 @@ export type LoginPayload = {
   password: string;
 };
 
+export type ForgotPasswordPayload = {
+  email: string;
+};
+
+export type ResetPasswordPayload = {
+  email: string;
+  code: string;
+  newPassword: string;
+};
+
 export const authApi = {
   register: async (payload: RegisterPayload) => {
     const response = await http.post<User>("/auth/register", payload);
@@ -23,6 +33,14 @@ export const authApi = {
   },
   profile: async () => {
     const response = await http.get<User>("/auth/profile");
+    return response.data;
+  },
+  forgotPassword: async (payload: ForgotPasswordPayload) => {
+    const response = await http.post<{ message: string }>("/auth/forgot-password", payload);
+    return response.data;
+  },
+  resetPassword: async (payload: ResetPasswordPayload) => {
+    const response = await http.post<{ message: string }>("/auth/reset-password", payload);
     return response.data;
   },
 };
