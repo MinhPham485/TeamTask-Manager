@@ -1,11 +1,13 @@
 :root {
-  --bg: #eef4ff;
-  --card: #ffffff;
-  --text: #0f274d;
-  --muted: #4b668f;
-  --line: #cfe0ff;
-  --primary: #1d4ed8;
-  --primary-strong: #1e40af;
+  --bg: #f4ece3;
+  --card: #fffaf5;
+  --text: #3f2f23;
+  --muted: #7a6756;
+  --line: #d8c7b7;
+  --primary: #8b7355;
+  --primary-strong: #705b43;
+  --primary-soft: rgba(139, 115, 85, 0.16);
+  --primary-soft-strong: #e7d9ca;
 }
 
 * {
@@ -18,8 +20,8 @@ body,
   margin: 0;
   min-height: 100%;
   font-family: "Avenir Next", "Segoe UI", sans-serif;
-  background: radial-gradient(circle at 25% 20%, #dbeafe 0%, transparent 40%),
-    radial-gradient(circle at 80% 5%, #eff6ff 0%, transparent 35%),
+  background: radial-gradient(circle at 25% 20%, #e8d9cb 0%, transparent 40%),
+    radial-gradient(circle at 80% 5%, #f5ebdf 0%, transparent 35%),
     var(--bg);
   color: var(--text);
 }
@@ -44,7 +46,7 @@ a {
   border-radius: 16px;
   border: 1px solid var(--line);
   background: var(--card);
-  box-shadow: 0 20px 50px rgba(20, 33, 61, 0.08);
+  box-shadow: 0 20px 50px rgba(111, 88, 63, 0.12);
 }
 
 .auth-card h1 {
@@ -78,7 +80,7 @@ a {
 }
 
 .success-text {
-  color: #1d4ed8;
+  color: var(--primary);
   margin: 0;
 }
 
@@ -91,7 +93,7 @@ a {
 .sidebar {
   padding: 1rem;
   border-right: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 250, 245, 0.78);
   backdrop-filter: blur(8px);
 }
 
@@ -113,7 +115,7 @@ a {
 }
 
 .nav-link.active {
-  background: rgba(29, 78, 216, 0.16);
+  background: var(--primary-soft);
   color: var(--text);
   font-weight: 700;
 }
@@ -131,7 +133,7 @@ a {
   align-items: center;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 250, 245, 0.88);
 }
 
 .topbar h1 {
@@ -652,9 +654,9 @@ a {
 }
 
 .chat-status.online {
-  border-color: #bfdbfe;
-  color: #1d4ed8;
-  background: #eff6ff;
+  border-color: #d4c1ae;
+  color: var(--primary);
+  background: var(--primary-soft-strong);
 }
 
 .chat-page {
@@ -988,7 +990,7 @@ a {
   height: 40px;
   border-radius: 999px;
   border: none;
-  background: #1976ff;
+  background: var(--primary);
   color: #fff;
   font-weight: 700;
   padding: 0 1rem;
@@ -1019,12 +1021,12 @@ a {
   height: 56px;
   border-radius: 999px;
   border: none;
-  background: linear-gradient(135deg, #1f7bff, #0a4dd7);
+  background: linear-gradient(135deg, #9b8366, #6f5a41);
   color: #fff;
   font-weight: 800;
   letter-spacing: 0.04em;
   cursor: pointer;
-  box-shadow: 0 10px 22px rgba(14, 49, 106, 0.3);
+  box-shadow: 0 10px 22px rgba(111, 88, 63, 0.28);
 }
 
 .floating-ai-panel {
@@ -1110,7 +1112,7 @@ a {
   border: none;
   border-radius: 999px;
   padding: 0 0.9rem;
-  background: #156ef9;
+  background: var(--primary-strong);
   color: #fff;
   font-weight: 700;
   cursor: pointer;
@@ -1152,7 +1154,7 @@ a {
 
   .mobile-link.active {
     color: var(--text);
-    background: rgba(29, 78, 216, 0.16);
+    background: var(--primary-soft);
   }
 
   .floating-ai-chat {
