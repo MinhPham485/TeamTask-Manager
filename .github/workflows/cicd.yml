@@ -104,12 +104,7 @@ jobs:
               key="$1"
               value="$2"
               # Robust replace-or-append using awk to avoid failing on grep exit codes
-              awk -F'=' -v k="$key" -v v="$value" '
-                BEGIN { found=0 }
-                $1==k { print k"="v; found=1; next }
-                { print }
-                END { if (!found) print k"="v }
-              ' .env.docker > .env.docker.tmp && mv .env.docker.tmp .env.docker
+              awk -F= -v k="$key" -v v="$value" 'BEGIN{found=0} $1==k{print k"="v; found=1; next} {print} END{if(!found) print k"="v}' .env.docker > .env.docker.tmp && mv .env.docker.tmp .env.docker
             }
 
             # Inject SMTP provider defaults and credentials
