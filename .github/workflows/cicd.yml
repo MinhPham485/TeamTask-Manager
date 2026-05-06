@@ -101,13 +101,15 @@ jobs:
 
             touch .env.docker
             set_env() {
-              local key="$1"
-              local value="$2"
-              if grep -q "^${key}=" .env.docker; then
-                sed -i "s|^${key}=.*|${key}=${value}|" .env.docker
-              else
-                printf "\n%s=%s\n" "${key}" "${value}" >> .env.docker
-              fi
+              key="$1"
+              value="$2"
+              # Robust replace-or-append using awk to avoid failing on grep exit codes
+              awk -F'=' -v k="$key" -v v="$value" '
+                BEGIN { found=0 }
+                $1==k { print k"="v; found=1; next }
+                { print }
+                END { if (!found) print k"="v }
+              ' .env.docker > .env.docker.tmp && mv .env.docker.tmp .env.docker
             }
 
             # Inject SMTP provider defaults and credentials
