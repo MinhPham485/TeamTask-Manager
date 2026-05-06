@@ -74,6 +74,15 @@ a {
   background: var(--primary-strong);
 }
 
+.auth-links {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.auth-links p {
+  margin: 0;
+}
+
 .error-text {
   color: #b42318;
   margin: 0;

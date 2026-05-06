@@ -96,8 +96,26 @@ jobs:
             git fetch --all --prune
             git checkout main
             git pull --ff-only origin main
+            touch .env.docker
+            set_env() {
+              local key="$1"
+              local value="$2"
+              if grep -q "^${key}=" .env.docker; then
+                sed -i "s|^${key}=.*|${key}=${value}|" .env.docker
+              else
+                printf "\n%s=%s\n" "${key}" "${value}" >> .env.docker
+              fi
+            }
+            # Inject SMTP provider defaults and credentials
+            set_env SMTP_PROVIDER "gmail"
+            set_env SMTP_HOST "smtp.gmail.com"
+            set_env SMTP_PORT "587"
+            set_env SMTP_USER "${{ secrets.SMTP_USER }}"
+            set_env SMTP_PASS "${{ secrets.SMTP_PASS }}"
+            set_env FROM_EMAIL "minh04082005@gmail.com"
+            set_env FROM_NAME "TaskManager"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-            sleep 10
+            sleep 10 
             docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend npm run migrate:deploy
             docker restart teamtask-nginx
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps

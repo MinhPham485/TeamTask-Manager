@@ -67,12 +67,14 @@ export function LoginPage() {
         <button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Signing in..." : "Login"}
         </button>
-        <p>
-          <Link to="/forgot-password">Forgot password?</Link>
-        </p>
-        <p>
-          No account? <Link to="/register">Create one</Link>
-        </p>
+        <div className="auth-links">
+          <p>
+            <Link to="/forgot-password">Forgot password?</Link>
+          </p>
+          <p>
+            No account? <Link to="/register">Create one</Link>
+          </p>
+        </div>
       </form>
     </div>
   );
