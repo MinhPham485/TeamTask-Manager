@@ -28,6 +28,7 @@ model User {
   directThreadsB DirectThread[] @relation("DirectThreadUserB")
   directMessagesSent DirectMessage[] @relation("DirectMessageSender")
   taskComments TaskComment[]
+  attachments Attachment[]
 }
 
 model Group {
@@ -77,6 +78,7 @@ model Task {
   taskLabels TaskLabel[]
   checklistItems ChecklistItem[]
   comments TaskComment[]
+  attachments Attachment[]
 
   @@index([listId, position])
 }
@@ -157,6 +159,28 @@ model Message {
 
   group  Group @relation(fields: [groupId], references: [id])
   sender User  @relation(fields: [senderId], references: [id])
+  attachments Attachment[]
+}
+
+model Attachment {
+  id        String   @id @default(uuid())
+  fileName  String
+  mimeType  String
+  size      Int
+  url       String
+  key       String
+  taskId    String?
+  messageId String?
+  uploaderId String
+  createdAt DateTime @default(now())
+
+  task     Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  message  Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  uploader User     @relation(fields: [uploaderId], references: [id])
+
+  @@index([taskId])
+  @@index([messageId])
+  @@index([uploaderId])
 }
 
 model DirectThread {

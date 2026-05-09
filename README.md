@@ -60,6 +60,16 @@ FROM_EMAIL=you@example.com
 FROM_NAME=TaskManager
 ```
 
+GCS (Google Cloud Storage) variables for file uploads (planned in Phase 3+):
+
+```env
+GCS_PROJECT_ID=your_project_id
+GCS_BUCKET=teamtask-uploads
+GCS_CLIENT_EMAIL=your_service_account_email
+GCS_PRIVATE_KEY=your_private_key
+GCS_PUBLIC_BASE_URL=          # optional if using public objects/CDN
+```
+
 ## Local run (Docker Compose)
 ### Development (full stack + monitoring)
 ```bash

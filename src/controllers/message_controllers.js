@@ -55,6 +55,7 @@ exports.getMessagesByGroup = async (req, res) => {
                 {createdAt: 'asc'}
             ],
             include: {
+                attachments: true,
                 sender: {
                     select: {
                         id: true,
