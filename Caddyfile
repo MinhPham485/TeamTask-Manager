@@ -1,3 +1,0 @@
-minhph.xyz, www.minhph.xyz {
-    reverse_proxy frontend:80
-}

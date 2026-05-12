@@ -47,21 +47,6 @@ services:
       - "80"
     restart: unless-stopped
 
-  caddy:
-    image: caddy:2-alpine
-    container_name: teamtask-caddy
-    depends_on:
-      - frontend
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    ports:
-      - "80:80"
-      - "443:443"
-    restart: unless-stopped
 
 volumes:
   pgdata:
-  caddy_data:
-  caddy_config:
