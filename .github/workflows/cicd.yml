@@ -117,18 +117,17 @@ jobs:
             set_env FROM_NAME "TaskManager"
 
             echo "===> starting docker compose"
-            if ! docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build; then
+            if ! docker compose -f docker-compose.prod.yml up -d --build; then
               echo "ERROR: docker compose up failed"
-              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --no-color || true
+              docker compose -f docker-compose.prod.yml logs --no-color || true
               exit 1
             fi
 
             sleep 10
 
             echo "===> running migrations inside backend"
-            if ! docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend npm run migrate:deploy; then
-              echo "ERROR: migrate:deploy failed"
-              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs backend --no-color || true
+            if ! docker compose -f docker-compose.prod.yml exec -T backend npm run migrate:deploy; then
+              docker compose -f docker-compose.prod.yml logs backend --no-color || true
               exit 1
             fi
 
@@ -138,4 +137,4 @@ jobs:
               docker ps -a || true
             fi
 
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+            docker compose -f docker-compose.prod.yml ps
