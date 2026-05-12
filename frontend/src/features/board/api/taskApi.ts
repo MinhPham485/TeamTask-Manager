@@ -1,5 +1,5 @@
 import { http } from "@/shared/api/http";
-import { Task } from "@/shared/types/models";
+import { Attachment, Task } from "@/shared/types/models";
 
 export type CreateTaskPayload = {
   title: string;
@@ -48,6 +48,17 @@ export const taskApi = {
   },
   assignLabels: async (taskId: string, labelIds: string[]) => {
     const response = await http.put<Task>(`/tasks/${taskId}/labels`, { labelIds });
+    return response.data;
+  },
+  getAttachments: async (taskId: string) => {
+    const response = await http.get<Attachment[]>(`/tasks/${taskId}/attachments`);
+    return response.data;
+  },
+  createAttachment: async (
+    taskId: string,
+    payload: { fileName: string; mimeType: string; size: number; url: string; key: string }
+  ) => {
+    const response = await http.post<Attachment>(`/tasks/${taskId}/attachments`, payload);
     return response.data;
   },
 };

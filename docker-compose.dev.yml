@@ -55,6 +55,13 @@ services:
     ports:
       - "3000:3000"
 
+  fake-gcs-server:
+    image: fsouza/fake-gcs-server:latest
+    container_name: teamtask-fake-gcs
+    command: ["-scheme", "http", "-port", "4443", "-public-host", "localhost:4443", "-backend", "memory"]
+    ports:
+      - "4443:4443"
+
 volumes:
   pgdata-dev:
   grafana-storage:

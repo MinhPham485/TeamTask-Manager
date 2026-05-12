@@ -622,6 +622,22 @@ a {
   gap: 0.5rem;
 }
 
+.task-attachment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.task-attachment-input {
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  padding: 0.35rem 0.6rem;
+  background: #fff;
+  color: var(--text);
+}
+
 .task-detail-list-item,
 .task-comment-item {
   border: 1px solid var(--line);
@@ -649,6 +665,27 @@ a {
 
 .task-comment-item p {
   margin: 0;
+}
+
+.attachment-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.45rem 0.6rem;
+}
+
+.attachment-link {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: underline;
 }
 
 .chat-status {
@@ -1004,6 +1041,32 @@ a {
   font-weight: 700;
   padding: 0 1rem;
   cursor: pointer;
+}
+
+.chat-upload-button {
+  height: 40px;
+  border-radius: 999px;
+  border: 1px dashed var(--line);
+  background: #fff;
+  color: var(--text);
+  font-weight: 700;
+  padding: 0 1rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.chat-upload-button input {
+  display: none;
+}
+
+.chat-upload-send {
+  background: #0f2f61;
+}
+
+.chat-file-hint {
+  margin: 0 0 0.35rem;
 }
 
 .messenger-composer button:disabled {

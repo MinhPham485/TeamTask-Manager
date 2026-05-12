@@ -68,6 +68,18 @@ GCS_BUCKET=teamtask-uploads
 GCS_CLIENT_EMAIL=your_service_account_email
 GCS_PRIVATE_KEY=your_private_key
 GCS_PUBLIC_BASE_URL=          # optional if using public objects/CDN
+GCS_UPLOAD_BASE_URL=          # optional if upload URL differs from public URL
+GCS_EMULATOR_HOST=            # optional when using local emulator
+```
+
+### Local GCS emulator
+For local-only testing, you can run a fake GCS server via docker compose and set:
+
+```env
+GCS_BUCKET=teamtask-uploads
+GCS_EMULATOR_HOST=http://fake-gcs-server:4443
+GCS_PUBLIC_BASE_URL=http://localhost:4443/teamtask-uploads
+GCS_UPLOAD_BASE_URL=http://localhost:4443/teamtask-uploads
 ```
 
 ## Local run (Docker Compose)

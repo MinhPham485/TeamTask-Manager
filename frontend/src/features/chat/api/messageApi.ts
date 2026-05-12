@@ -10,6 +10,18 @@ export const messageApi = {
     const response = await http.post<Message>("/messages", payload);
     return response.data;
   },
+  createWithAttachment: async (payload: {
+    groupId: string;
+    content?: string;
+    fileName: string;
+    mimeType: string;
+    size: number;
+    url: string;
+    key: string;
+  }) => {
+    const response = await http.post<Message>("/messages/attachments", payload);
+    return response.data;
+  },
   getDirectThreads: async () => {
     const response = await http.get<DirectThread[]>("/messages/direct/threads");
     return response.data;

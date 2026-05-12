@@ -1,5 +1,11 @@
 const {Storage} = require('@google-cloud/storage');
 
+const normalizeHost = (value) => (value ? value.replace(/\/$/, '') : null);
+
+const getEmulatorHost = () => {
+    return normalizeHost(process.env.GCS_EMULATOR_HOST || process.env.STORAGE_EMULATOR_HOST || '');
+};
+
 const buildStorageClient = () => {
     const projectId = process.env.GCS_PROJECT_ID;
     const clientEmail = process.env.GCS_CLIENT_EMAIL;
@@ -11,7 +17,9 @@ const buildStorageClient = () => {
         ? {client_email: clientEmail, private_key: privateKey}
         : undefined;
 
-    return new Storage({projectId, credentials});
+    const apiEndpoint = getEmulatorHost() || undefined;
+
+    return new Storage({projectId, credentials, apiEndpoint});
 };
 
 const getBucketName = () => {
@@ -25,7 +33,8 @@ const getBucketName = () => {
 };
 
 const buildPublicUrl = (objectKey) => {
-    const baseUrl = process.env.GCS_PUBLIC_BASE_URL;
+    const emulatorHost = getEmulatorHost();
+    const baseUrl = normalizeHost(process.env.GCS_PUBLIC_BASE_URL) || emulatorHost;
 
     if (baseUrl) {
         return `${baseUrl.replace(/\/$/, '')}/${objectKey}`;
@@ -34,9 +43,25 @@ const buildPublicUrl = (objectKey) => {
     return `https://storage.googleapis.com/${getBucketName()}/${objectKey}`;
 };
 
+const getUploadBaseUrl = () => {
+    return normalizeHost(process.env.GCS_UPLOAD_BASE_URL)
+        || normalizeHost(process.env.GCS_PUBLIC_BASE_URL)
+        || getEmulatorHost();
+};
+
 const createUploadUrl = async ({objectKey, contentType, expiresInSeconds}) => {
-    const storage = buildStorageClient();
+    const emulatorHost = getEmulatorHost();
     const bucketName = getBucketName();
+
+    if (emulatorHost) {
+        const uploadBaseUrl = getUploadBaseUrl();
+        return {
+            uploadUrl: `${uploadBaseUrl}/${bucketName}/${objectKey}`,
+            fileUrl: buildPublicUrl(objectKey)
+        };
+    }
+
+    const storage = buildStorageClient();
     const file = storage.bucket(bucketName).file(objectKey);
 
     const [uploadUrl] = await file.getSignedUrl({

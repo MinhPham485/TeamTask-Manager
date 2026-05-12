@@ -86,6 +86,19 @@ export type TaskComment = {
   sender?: User;
 };
 
+export type Attachment = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  url: string;
+  key: string;
+  taskId?: string | null;
+  messageId?: string | null;
+  uploaderId?: string;
+  createdAt?: string;
+};
+
 export type Message = {
   id: string;
   groupId: string;
@@ -93,6 +106,7 @@ export type Message = {
   content: string;
   createdAt: string;
   sender?: User;
+  attachments?: Attachment[];
 };
 
 export type DirectMessage = {

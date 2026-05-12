@@ -18,6 +18,9 @@ export const queryKeys = {
   comments: {
     byTask: (taskId: string) => ["comments", taskId] as const,
   },
+  attachments: {
+    byTask: (taskId: string) => ["attachments", "task", taskId] as const,
+  },
   messages: {
     byGroup: (groupId: string) => ["messages", groupId] as const,
   },

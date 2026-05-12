@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import axios from "axios";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { messageApi } from "@/features/chat/api/messageApi";
 import { disconnectSocketClient, getSocketClient, reconnectSocketAuthToken } from "@/features/chat/socket/socketClient";
@@ -6,6 +7,16 @@ import { groupApi } from "@/features/groups/api/groupApi";
 import { authStore } from "@/features/auth/store/authStore";
 import { queryKeys } from "@/shared/query/queryKeys";
 import { DirectMessage, DirectThread, Message } from "@/shared/types/models";
+import { uploadApi } from "@/shared/api/uploadApi";
+
+const MAX_FILE_SIZE = 3 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "image/png",
+  "image/jpeg",
+]);
 
 type AckResponse = {
   ok: boolean;
@@ -24,6 +35,20 @@ function formatTime(dateString: string) {
   return date.toLocaleString();
 }
 
+function formatFileSize(size: number) {
+  if (size < 1024) {
+    return `${size} B`;
+  }
+
+  const kb = size / 1024;
+  if (kb < 1024) {
+    return `${kb.toFixed(1)} KB`;
+  }
+
+  const mb = kb / 1024;
+  return `${mb.toFixed(2)} MB`;
+}
+
 export function ChatPage() {
   const socket = useMemo(() => getSocketClient(), []);
   const currentGroupId = authStore((state) => state.currentGroupId);
@@ -35,6 +60,9 @@ export function ChatPage() {
   const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
   const [directThreads, setDirectThreads] = useState<DirectThread[]>([]);
   const [draft, setDraft] = useState("");
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [attachmentUploading, setAttachmentUploading] = useState(false);
   const [socketStatus, setSocketStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected");
   const [error, setError] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState("");
@@ -123,6 +151,11 @@ export function ChatPage() {
   useEffect(() => {
     setDirectUserId(null);
   }, [currentGroupId]);
+
+  useEffect(() => {
+    setAttachmentFile(null);
+    setAttachmentError(null);
+  }, [chatMode, currentGroupId]);
 
   useEffect(() => {
     if (!messageListRef.current) {
@@ -384,6 +417,84 @@ export function ChatPage() {
     });
   };
 
+  const onPickAttachment = (file?: File | null) => {
+    if (!file) {
+      setAttachmentFile(null);
+      return;
+    }
+
+    if (!ALLOWED_MIME_TYPES.has(file.type)) {
+      setAttachmentError("File type is not allowed.");
+      setAttachmentFile(null);
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      setAttachmentError("File size exceeds 3MB.");
+      setAttachmentFile(null);
+      return;
+    }
+
+    setAttachmentFile(file);
+    setAttachmentError(null);
+  };
+
+  const onUploadAttachment = async () => {
+    if (!currentGroupId) {
+      setAttachmentError("Please select a group.");
+      return;
+    }
+
+    if (!attachmentFile) {
+      setAttachmentError("Choose a file to upload.");
+      return;
+    }
+
+    try {
+      setAttachmentUploading(true);
+      setAttachmentError(null);
+
+      const presign = await uploadApi.presign({
+        groupId: currentGroupId,
+        fileName: attachmentFile.name,
+        mimeType: attachmentFile.type,
+        size: attachmentFile.size,
+        targetType: "message",
+      });
+
+      await axios.put(presign.uploadUrl, attachmentFile, {
+        headers: {
+          "Content-Type": attachmentFile.type,
+        },
+      });
+
+      const response = await messageApi.createWithAttachment({
+        groupId: currentGroupId,
+        content: draft.trim() || undefined,
+        fileName: attachmentFile.name,
+        mimeType: attachmentFile.type,
+        size: attachmentFile.size,
+        url: presign.fileUrl,
+        key: presign.key,
+      });
+
+      setGroupMessages((prev) => {
+        if (prev.some((item) => item.id === response.id)) {
+          return prev;
+        }
+
+        return [...prev, response];
+      });
+
+      setDraft("");
+      setAttachmentFile(null);
+    } catch (uploadError) {
+      setAttachmentError("Could not upload attachment.");
+    } finally {
+      setAttachmentUploading(false);
+    }
+  };
+
   const getGroupInitial = (name: string) => {
     return name.trim().charAt(0).toUpperCase() || "#";
   };
@@ -540,6 +651,7 @@ export function ChatPage() {
         </header>
 
         {error ? <p className="error-text page-feedback">{error}</p> : null}
+        {attachmentError ? <p className="error-text page-feedback">{attachmentError}</p> : null}
         {chatMode === "group" && messagesQuery.isError ? <p className="error-text">Could not load message history.</p> : null}
         {chatMode === "direct" && directMessagesQuery.isError ? <p className="error-text">Could not load direct messages.</p> : null}
 
@@ -555,6 +667,7 @@ export function ChatPage() {
 
           {visibleMessages.map((message) => {
             const isMine = message.senderId === currentUser?.id;
+            const attachments = "attachments" in message ? message.attachments : undefined;
 
             return (
               <article key={message.id} className={isMine ? "messenger-message mine" : "messenger-message"}>
@@ -564,6 +677,18 @@ export function ChatPage() {
                     <strong>{getSenderName(message)}</strong>
                   </header>
                   <p>{message.content}</p>
+                  {attachments?.length ? (
+                    <div className="attachment-list">
+                      {attachments.map((attachment) => (
+                        <article key={attachment.id} className="attachment-item">
+                          <a className="attachment-link" href={attachment.url} target="_blank" rel="noreferrer">
+                            {attachment.fileName}
+                          </a>
+                          <small className="muted-text">{formatFileSize(attachment.size)}</small>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </article>
             );
@@ -571,6 +696,15 @@ export function ChatPage() {
         </div>
 
         <form className="messenger-composer" onSubmit={handleSend}>
+          <label className="chat-upload-button">
+            <input
+              type="file"
+              accept=".pdf,.docx,.xlsx,image/png,image/jpeg"
+              onChange={(event) => onPickAttachment(event.target.files?.[0])}
+              disabled={chatMode !== "group" || !currentGroupId || attachmentUploading}
+            />
+            Attach
+          </label>
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -581,7 +715,18 @@ export function ChatPage() {
           <button type="submit" disabled={(chatMode === "group" ? !currentGroupId : !directUserId) || socketStatus !== "connected"}>
             Send
           </button>
+          <button
+            type="button"
+            className="chat-upload-send"
+            onClick={onUploadAttachment}
+            disabled={chatMode !== "group" || !currentGroupId || attachmentUploading || !attachmentFile}
+          >
+            {attachmentUploading ? "Uploading..." : "Send file"}
+          </button>
         </form>
+        {attachmentFile ? (
+          <p className="muted-text chat-file-hint">Selected: {attachmentFile.name}</p>
+        ) : null}
       </section>
     </section>
   );
