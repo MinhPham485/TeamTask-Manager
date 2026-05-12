@@ -47,17 +47,21 @@ services:
       - "80"
     restart: unless-stopped
 
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: teamtask-nginx
+  caddy:
+    image: caddy:2-alpine
+    container_name: teamtask-caddy
     depends_on:
       - frontend
-      - backend
     volumes:
-      - ./nginx/prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     ports:
       - "80:80"
+      - "443:443"
     restart: unless-stopped
 
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:
