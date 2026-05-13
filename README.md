@@ -1,222 +1,275 @@
 # TeamTask Manager
 
-TeamTask is a collaborative task management platform with a Node.js backend, a Vite/React frontend, and production-grade observability. The repo is designed for fast local setup with Docker Compose and automated deployment via GitHub Actions over SSH.
+TeamTask Manager is a collaborative task management platform built with a Node.js/Express backend, a Vite/React frontend, PostgreSQL, Prisma ORM, and real-time communication via Socket.IO.
 
-## Highlights
-- Team, board, list, task, comment, and group management.
-- Real-time chat via sockets.
-- AI-assisted workflows (backend metrics included).
-- Observability with Prometheus + Grafana (HTTP and AI metrics).
-- CI/CD pipeline with automated deploy to production.
+The project also demonstrates practical DevOps and cloud deployment workflows, including Docker Compose, Nginx reverse proxy, GitHub Actions CI/CD, deployment on Google Cloud Platform, HTTPS with Let’s Encrypt/Certbot, and local observability with Prometheus and Grafana.
+
+🔗 Live demo: https://minhph.xyz
+
+---
+
+## Features
+
+- User authentication and account management
+- Group, list, task, comment, and member management
+- RESTful APIs using Node.js and Express
+- Real-time communication with Socket.IO
+- Gemini-powered chatbot for task-related queries and summaries
+- PostgreSQL database managed with Prisma ORM
+- Backend metrics instrumentation for observability
+
+---
+
+## Tech Stack
+
+**Backend:** Node.js, Express, Prisma ORM, PostgreSQL, Socket.IO, Jest  
+**Frontend:** React, Vite, TypeScript  
+**DevOps & Cloud:** Docker, Docker Compose, Nginx, Certbot, GitHub Actions, GCP Compute Engine, Linux  
+**Observability:** Prometheus, Grafana, prom-client
+
+---
 
 ## Architecture
-- Backend: Node.js/Express, Prisma, PostgreSQL.
-- Frontend: Vite + React + TypeScript.
-- Reverse proxy: Nginx.
-- Observability: Prometheus + Grafana.
-- Delivery: Docker Compose (dev/prod) + GitHub Actions.
 
-## Tech stack
-- Backend: Node.js 20, Express, Prisma, PostgreSQL.
-- Frontend: Vite, React, TypeScript.
-- DevOps: Docker, Docker Compose, GitHub Actions, Nginx.
-- Observability: Prometheus, Grafana.
-
-## Repository layout
-```
-src/                 # Backend
-frontend/            # Frontend (Vite)
-prisma/              # Prisma schema + migrations
-nginx/               # Nginx config
-prometheus/          # Prometheus config
-grafana/             # Grafana provisioning
-.github/workflows/   # CI/CD workflows
+```txt
+Client
+  |
+  | HTTPS
+  v
+Nginx Reverse Proxy
+  |
+  |-- Frontend service
+  |
+  |-- Backend API service
+        |
+        |-- PostgreSQL
+        |-- Gemini API
+        |-- Prometheus metrics
 ```
 
-## Requirements
-- Node.js 20+
-- Docker + Docker Compose
-- PostgreSQL (only if running backend outside Docker)
+Production is deployed on a GCP Compute Engine VM using Docker Compose. Nginx handles reverse proxy routing, SSL termination, and HTTP-to-HTTPS redirection.
 
-## Environment configuration
-The project uses `.env.docker` for Docker Compose. Core variables:
+---
 
-```env
-POSTGRES_DB=teamtask
-POSTGRES_USER=teamtask
-POSTGRES_PASSWORD=teamtaskpw
-JWT_SECRET=change-me-in-real-usage
+## Repository Structure
+
+```txt
+.
+├── src/                    # Backend source code
+├── frontend/               # Frontend source code
+├── prisma/                 # Prisma schema and migrations
+├── nginx/                  # Nginx production configuration
+├── prometheus/             # Prometheus configuration
+├── grafana/                # Grafana provisioning
+├── .github/workflows/      # GitHub Actions CI/CD workflow
+├── Dockerfile              # Backend Dockerfile
+├── docker-compose.dev.yml  # Development Docker Compose file
+├── docker-compose.prod.yml # Production Docker Compose file
+└── deploy.sh               # Deployment script
 ```
 
-SMTP variables are injected during deploy (see CI/CD section):
+---
 
-```env
-SMTP_PROVIDER=gmail
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_smtp_user
-SMTP_PASS=your_smtp_pass
-FROM_EMAIL=you@example.com
-FROM_NAME=TaskManager
-```
+## Local Development
 
-GCS (Google Cloud Storage) variables for file uploads (planned in Phase 3+):
+Start the local development environment:
 
-```env
-GCS_PROJECT_ID=your_project_id
-GCS_BUCKET=teamtask-uploads
-GCS_CLIENT_EMAIL=your_service_account_email
-GCS_PRIVATE_KEY=your_private_key
-GCS_PUBLIC_BASE_URL=          # optional if using public objects/CDN
-GCS_UPLOAD_BASE_URL=          # optional if upload URL differs from public URL
-GCS_EMULATOR_HOST=            # optional when using local emulator
-```
-
-### Local GCS emulator
-For local-only testing, you can run a fake GCS server via docker compose and set:
-
-```env
-GCS_BUCKET=teamtask-uploads
-GCS_EMULATOR_HOST=http://fake-gcs-server:4443
-GCS_PUBLIC_BASE_URL=http://localhost:4443/teamtask-uploads
-GCS_UPLOAD_BASE_URL=http://localhost:4443/teamtask-uploads
-```
-
-## Local run (Docker Compose)
-### Development (full stack + monitoring)
 ```bash
 docker compose -f docker-compose.dev.yml up -d --build
 ```
 
-Defaults:
-- Frontend dev: http://localhost:5173
-- Backend: http://localhost:5001
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000 (admin/admin)
+Default local services:
 
-### Production-like (compose prod)
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```txt
+Frontend:   http://localhost:5173
+Backend:    http://localhost:5001
+Prometheus: http://localhost:9090
+Grafana:    http://localhost:3000
 ```
 
-Nginx exposes port 80.
+Default Grafana credentials:
 
-## Run without Docker
-Backend:
-```bash
-npm ci
-npx prisma generate
-npx prisma migrate deploy
-npm test
-npm run dev
+```txt
+Username: admin
+Password: admin
 ```
 
-Frontend:
+---
+
+## Production Deployment
+
+Production runs on a GCP Compute Engine VM.
+
+Start production services:
+
 ```bash
-cd frontend
-npm ci
-npm run dev
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-## Tests
-```bash
-npm test
+Production services:
+
+- `teamtask-frontend`
+- `teamtask-backend`
+- `teamtask-db`
+- `teamtask-nginx`
+- `teamtask-certbot`
+
+Nginx exposes ports `80` and `443`.
+
+---
+
+## Nginx & HTTPS
+
+Production routing is defined in:
+
+```txt
+nginx/prod.conf
 ```
+
+Main routes:
+
+```txt
+/             -> frontend:80
+/api/         -> backend:5000
+/socket.io/   -> backend:5000
+```
+
+Nginx handles:
+
+- Reverse proxy routing
+- HTTP to HTTPS redirect
+- SSL termination
+- Socket.IO upgrade headers
+- ACME challenge path for Certbot
+
+HTTPS is configured using Let’s Encrypt and Certbot.
+
+Certbot uses the webroot challenge path:
+
+```txt
+/var/www/certbot
+```
+
+Certificates are stored in:
+
+```txt
+/etc/letsencrypt
+```
+
+Renew certificates:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm certbot renew
+docker restart teamtask-nginx
+```
+
+---
+
+## CI/CD
+
+CI/CD is implemented with GitHub Actions.
+
+Workflow file:
+
+```txt
+.github/workflows/cicd.yml
+```
+
+Pipeline steps:
+
+- Install backend dependencies
+- Generate Prisma client
+- Apply Prisma migrations
+- Run backend tests
+- Install and build frontend
+- Deploy to the GCP server via SSH on push to `main`
+
+Main production deploy commands:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml exec -T backend npm run migrate:deploy
+```
+
+Required GitHub Actions secrets:
+
+```txt
+DEPLOY_HOST
+DEPLOY_USER
+DEPLOY_SSH_KEY
+DEPLOY_PATH
+SMTP_USER
+SMTP_PASS
+```
+
+---
 
 ## Observability
-The monitoring stack is ready with Prometheus + Grafana. The backend is instrumented with custom metrics via `prom-client`.
 
-### Key metrics
-- `teamtask_http_requests_total`: total HTTP requests by `method`, `route`, `status_code`.
-- `teamtask_http_request_duration_ms`: HTTP latency histogram.
-- `teamtask_ai_requests_total`: total AI requests by `method`, `endpoint`, `status_code`.
-- `teamtask_ai_request_duration_ms`: AI latency histogram.
-- `teamtask_ai_request_errors_total`: total AI errors (`status_code >= 400`).
+The backend is instrumented with custom metrics using `prom-client`.
 
-### PromQL examples
-HTTP RPS:
-```promql
-sum(rate(teamtask_http_requests_total[5m]))
+Prometheus and Grafana are configured for local development observability.
+
+Key metrics include:
+
+```txt
+teamtask_http_requests_total
+teamtask_http_request_duration_ms
+teamtask_ai_requests_total
+teamtask_ai_request_duration_ms
+teamtask_ai_request_errors_total
 ```
 
-HTTP Error Rate (%):
-```promql
-100 * ((sum(increase(teamtask_http_requests_total{status_code=~"[45].."}[$__range])) or on() vector(0)) / clamp_min((sum(increase(teamtask_http_requests_total[$__range])) or on() vector(0)), 1))
-```
+Example Grafana dashboard:
 
-HTTP p95 Latency:
-```promql
-histogram_quantile(0.95, sum by (le) (rate(teamtask_http_request_duration_ms_bucket[$__rate_interval])))
-```
+![Grafana Dashboard](docs/images/grafana-dashboard.png)
 
-AI RPS:
-```promql
-sum(rate(teamtask_ai_requests_total[5m]))
-```
+---
 
-AI Error Rate (%):
-```promql
-100 * ((sum(increase(teamtask_ai_requests_total{status_code=~"[45].."}[$__range])) or on() vector(0)) / clamp_min((sum(increase(teamtask_ai_requests_total[$__range])) or on() vector(0)), 1))
-```
+## Useful Commands
 
-AI p95 Latency:
-```promql
-histogram_quantile(0.95, sum by (le) (rate(teamtask_ai_request_duration_ms_bucket[$__rate_interval])))
-```
+Check running containers:
 
-## CI/CD (GitHub Actions)
-Workflow location: [.github/workflows/cicd.yml](.github/workflows/cicd.yml).
-
-### Backend CI
-- Provision PostgreSQL service.
-- `npm ci`
-- `npx prisma generate`
-- `npx prisma migrate deploy`
-- `npm test`
-
-### Frontend CI
-- `npm ci --prefix frontend`
-- `npm run build --prefix frontend`
-
-### Deploy (production)
-Runs only on push to `main`. The pipeline SSHes into the server, pulls code, updates `.env.docker`, runs Docker Compose, and applies DB migrations.
-
-Required secrets:
-- `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_PATH`
-- `SMTP_USER`, `SMTP_PASS`
-
-Main deploy commands:
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend npm run migrate:deploy
+docker ps
 ```
 
-## Docker Compose (dev vs prod)
-### Dev
-- Backend port mapping: `${DOCKER_BACKEND_PORT:-5001}:5000`
-- Frontend dev server: `5173:5173`
-- Prometheus + Grafana enabled
+View production logs:
 
-### Prod
-- Frontend built in container
-- Nginx reverse proxy on `80:80`
-
-## Nginx
-Production routes are defined in `nginx/prod.conf` to serve frontend and proxy backend APIs.
-
-## Safe deploy notes
-- Run DB migrations after `docker compose up`.
-- If deploy fails, inspect logs:
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --no-color
+docker compose -f docker-compose.prod.yml logs --no-color
 ```
 
-## Troubleshooting
-- Backend fails to start: check DB healthcheck and `DATABASE_URL`.
-- Frontend cannot call API: check `VITE_API_BASE_URL` and Nginx config.
-- Missing metrics: check backend metrics endpoint and `prometheus.yml`.
+Run database migrations:
 
-## References
-- Prisma schema: `prisma/schema.prisma`
-- Backend entry: `src/server.js`
-- Frontend entry: `frontend/src/main.tsx`
+```bash
+docker compose -f docker-compose.prod.yml exec -T backend npm run migrate:deploy
+```
+
+Restart Nginx:
+
+```bash
+docker restart teamtask-nginx
+```
+
+Check HTTPS:
+
+```bash
+curl -I https://minhph.xyz
+```
+
+Clean Docker cache if disk is low:
+
+```bash
+docker builder prune -af
+docker image prune -af
+docker container prune -f
+```
+
+---
+
+## Notes
+
+- Monitoring with Prometheus and Grafana is currently configured for local development.
+- Production deployment focuses on the application stack, Nginx reverse proxy, HTTPS, and CI/CD deployment on GCP.
+- Let’s Encrypt certificates must be renewed before expiry using the Certbot renew command.
