@@ -778,7 +778,7 @@ a {
   gap: 0.55rem;
   background: #eef3ff;
   border: 1px solid #cfe0ff;
-  border-radius: 16px;
+  border-radius: 8px;
   padding: 0.6rem;
   min-height: 0;
   overflow: hidden;
@@ -836,6 +836,15 @@ a {
   overflow-y: auto;
 }
 
+.conversation-table {
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
 .messenger-sidebar-header {
   display: flex;
   justify-content: space-between;
@@ -866,7 +875,7 @@ a {
 .messenger-room {
   width: 100%;
   border: none;
-  border-radius: 12px;
+  border-radius: 8px;
   background: transparent;
   display: flex;
   align-items: center;
@@ -903,14 +912,33 @@ a {
 .messenger-room-copy {
   display: grid;
   gap: 0.05rem;
+  min-width: 0;
+  flex: 1;
 }
 
 .messenger-room-copy strong {
   font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .messenger-room-copy small {
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-kind {
+  flex: 0 0 auto;
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.18rem 0.45rem;
 }
 
 .messenger-thread {
