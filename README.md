@@ -14,7 +14,7 @@ The project also demonstrates practical DevOps and cloud deployment workflows, i
 - Group, list, task, comment, and member management
 - RESTful APIs using Node.js and Express
 - Real-time communication with Socket.IO
-- Gemini-powered chatbot for task-related queries and summaries
+- AI-powered chatbot for task-related queries and summaries
 - PostgreSQL database managed with Prisma ORM
 - Backend metrics instrumentation for observability
 
@@ -272,4 +272,4 @@ docker container prune -f
 
 - Monitoring with Prometheus and Grafana is currently configured for local development.
 - Production deployment focuses on the application stack, Nginx reverse proxy, HTTPS, and CI/CD deployment on GCP.
-- Let’s Encrypt certificates must be renewed before expiry using the Certbot renew command.
+- Let’s Encrypt certificates can be renewed using the Certbot renew command.
