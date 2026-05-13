@@ -43,7 +43,7 @@ Nginx Reverse Proxy
   |-- Backend API service
         |
         |-- PostgreSQL
-        |-- Gemini API
+        |-- AI provider API
         |-- Prometheus metrics
 ```
 
