@@ -120,7 +120,7 @@ jobs:
             set_env GCS_PROJECT_ID "taskupload-496308"
             set_env GCS_BUCKET "teamtaskmanager-demo-bucket"
             set_env GCS_CLIENT_EMAIL "upload-service@taskupload-496308.iam.gserviceaccount.com"
-            set_env GCS_PRIVATE_KEY "${{ secrets.GCS_PRIVATE_KEY }}"
+            set_env GCS_PRIVATE_KEY '"${{ secrets.GCS_PRIVATE_KEY }}"'
             set_env GCS_PUBLIC_BASE_URL "https://storage.googleapis.com/teamtaskmanager-demo-bucket"
 
             echo "===> starting docker compose"
