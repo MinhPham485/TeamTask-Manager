@@ -92,7 +92,7 @@ jobs:
           script_stop: true
           script: |
             # enable debug output and fail fast for visible errors
-            set -xuo pipefail
+            set -euo pipefail
             cd "${{ secrets.DEPLOY_PATH }}"
             echo "===> fetching latest"
             git fetch --all --prune
@@ -115,6 +115,13 @@ jobs:
             set_env SMTP_PASS "${{ secrets.SMTP_PASS }}"
             set_env FROM_EMAIL "minh04082005@gmail.com"
             set_env FROM_NAME "TaskManager"
+
+            # Inject GCS settings
+            set_env GCS_PROJECT_ID "taskupload-496308"
+            set_env GCS_BUCKET "teamtaskmanager-demo-bucket"
+            set_env GCS_CLIENT_EMAIL "upload-service@taskupload-496308.iam.gserviceaccount.com"
+            set_env GCS_PRIVATE_KEY "${{ secrets.GCS_PRIVATE_KEY }}"
+            set_env GCS_PUBLIC_BASE_URL "https://storage.googleapis.com/teamtaskmanager-demo-bucket"
 
             echo "===> starting docker compose"
             if ! docker compose -f docker-compose.prod.yml up -d --build; then

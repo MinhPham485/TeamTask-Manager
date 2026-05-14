@@ -3,3 +3,4 @@ node_modules
 .env.docker
 /generated/prisma
 docs/ai/PHASE0_CONTRACT.md
+.DS_Store
