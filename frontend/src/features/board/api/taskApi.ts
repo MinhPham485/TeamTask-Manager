@@ -9,6 +9,8 @@ export type CreateTaskPayload = {
   position?: number;
   dueDate?: string;
   assignedTo?: string;
+  progress?: number;
+  priority?: Task["priority"];
 };
 
 export type UpdateTaskPayload = {
@@ -16,6 +18,8 @@ export type UpdateTaskPayload = {
   description?: string;
   dueDate?: string | null;
   assignedTo?: string | null;
+  progress?: number;
+  priority?: Task["priority"];
 };
 
 export const taskApi = {

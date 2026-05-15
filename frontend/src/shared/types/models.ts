@@ -59,6 +59,8 @@ export type Task = {
   assignee?: User | null;
   creator?: User | null;
   taskLabels?: Array<{ label: Label }>;
+  progress: number;
+  priority: "High" | "Medium" | "Low" | "Done";
 };
 
 export type Label = {

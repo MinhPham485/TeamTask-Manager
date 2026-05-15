@@ -2,6 +2,32 @@ const {PrismaClient} = require('@prisma/client');
 require('dotenv').config();
 const prisma = new PrismaClient();
 
+const ALLOWED_PRIORITIES = new Set(['Low', 'Medium', 'High', 'Done']);
+
+const normalizeProgress = (value) => {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (!Number.isInteger(value) || value < 0 || value > 100) {
+        return null;
+    }
+
+    return value;
+};
+
+const normalizePriority = (value) => {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (typeof value !== 'string' || !ALLOWED_PRIORITIES.has(value)) {
+        return null;
+    }
+
+    return value;
+};
+
 const clampPosition = (position, maxPosition) => {
     if (!Number.isInteger(position)) {
         return null;
@@ -56,7 +82,7 @@ const isGroupMember = async (userId, groupId) => {
 
 exports.createTask = async (req, res) => {
     try {
-        const {title, description, groupId, assignedTo, listId} = req.body;
+        const {title, description, groupId, assignedTo, listId, progress, priority} = req.body;
 
         if (!groupId) {
             return res.status(400).json({ error: 'Group ID is required' });
@@ -116,6 +142,21 @@ exports.createTask = async (req, res) => {
             }
         });
 
+        const normalizedProgress = normalizeProgress(progress);
+
+        if (normalizedProgress === null) {
+            return res.status(400).json({ error: 'Progress must be an integer from 0 to 100' });
+        }
+
+        const normalizedPriority = normalizePriority(priority);
+
+        if (normalizedPriority === null) {
+            return res.status(400).json({ error: 'Priority must be Low, Medium, High, or Done' });
+        }
+
+        const taskProgress = normalizedProgress ?? 0;
+        const taskPriority = normalizedPriority ?? 'Low';
+
         const task = await prisma.task.create({
             data: {
                 title,
@@ -124,7 +165,9 @@ exports.createTask = async (req, res) => {
                 listId: targetList.id,
                 position: (lastTask?.position ?? -1) + 1,
                 assignedTo,
-                createdBy: req.user.userId
+                createdBy: req.user.userId,
+                progress: taskProgress,
+                priority: taskPriority
             },
             include: {
                 assignee: {
@@ -213,7 +256,7 @@ exports.getTasksByGroup = async (req, res) => {
 exports.updateTask = async (req, res) => {
     try {
         const {id} = req.params;
-        const {title, description, assignedTo, dueDate} = req.body;
+        const {title, description, assignedTo, dueDate, progress, priority} = req.body;
 
         const currentTask = req.task || await prisma.task.findUnique({
             where: {id},
@@ -235,9 +278,31 @@ exports.updateTask = async (req, res) => {
             }
         }
 
+        const normalizedProgress = normalizeProgress(progress);
+
+        if (normalizedProgress === null) {
+            return res.status(400).json({error: 'Progress must be an integer from 0 to 100'});
+        }
+
+        const normalizedPriority = normalizePriority(priority);
+
+        if (normalizedPriority === null) {
+            return res.status(400).json({error: 'Priority must be Low, Medium, High, or Done'});
+        }
+
+        const data = {title, description, assignedTo, dueDate};
+
+        if (normalizedProgress !== undefined) {
+            data.progress = normalizedProgress;
+        }
+
+        if (normalizedPriority !== undefined) {
+            data.priority = normalizedPriority;
+        }
+
         const task = await prisma.task.update({
             where: {id},
-            data: {title, description, assignedTo, dueDate},
+            data,
             include: {
                 assignee: {
                     select: {

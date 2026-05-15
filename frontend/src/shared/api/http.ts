@@ -1,8 +1,9 @@
 import axios from "axios";
 import { authStore } from "@/features/auth/store/authStore";
+import { env } from "@/shared/config/env";
 
 export const http = axios.create({
-  baseURL: "/api",
+  baseURL: `${env.apiBaseUrl}/api`,
   headers: {
     "Content-Type": "application/json",
   },

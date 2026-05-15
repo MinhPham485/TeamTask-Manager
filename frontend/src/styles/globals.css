@@ -473,6 +473,82 @@ a {
   margin: 0;
 }
 
+.task-card-progress-label {
+  display: block;
+  margin-top: 0.55rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.task-card-progress,
+.task-progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.task-card-progress {
+  margin-top: 0.25rem;
+}
+
+.task-card-progress span,
+.task-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2f855a;
+}
+
+.task-card-meta,
+.task-progress-summary,
+.task-progress-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.task-card-meta,
+.task-progress-summary {
+  justify-content: space-between;
+  margin-top: 0.4rem;
+}
+
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 0 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.priority-high {
+  color: #b42318;
+  background: #fff0ee;
+  border: 1px solid #fecdca;
+}
+
+.priority-medium {
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.priority-low {
+  color: #175cd3;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.priority-done {
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
 .task-card small {
   display: block;
   margin-top: 0.35rem;
@@ -556,6 +632,8 @@ a {
 
 .task-detail-form button,
 .task-detail-inline button,
+.task-progress-controls button,
+.task-priority-form button,
 .task-label-list > button {
   height: 40px;
   border-radius: 10px;
@@ -574,6 +652,47 @@ a {
 
 .task-detail-section h4 {
   margin: 0;
+}
+
+.task-progress-form {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.task-progress-form label,
+.task-priority-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.task-progress-form input[type="range"] {
+  width: 100%;
+}
+
+.task-progress-controls input {
+  width: 86px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0 0.65rem;
+}
+
+.task-priority-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto auto;
+  gap: 0.55rem;
+  align-items: end;
+}
+
+.task-priority-form select {
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  padding: 0 0.65rem;
 }
 
 .task-detail-inline {

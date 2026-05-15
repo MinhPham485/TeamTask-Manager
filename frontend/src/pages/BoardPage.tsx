@@ -26,6 +26,25 @@ function sortByPosition<T extends { position: number }>(items: T[]) {
   return [...items].sort((a, b) => a.position - b.position);
 }
 
+const PRIORITY_ORDER: Record<Task["priority"], number> = {
+  High: 0,
+  Medium: 1,
+  Low: 2,
+  Done: 3,
+};
+
+function sortByPriorityThenPosition(items: Task[]) {
+  return [...items].sort((a, b) => {
+    const priorityDifference = PRIORITY_ORDER[a.priority ?? "Low"] - PRIORITY_ORDER[b.priority ?? "Low"];
+
+    if (priorityDifference !== 0) {
+      return priorityDifference;
+    }
+
+    return a.position - b.position;
+  });
+}
+
 function applyMove(tasks: Task[], taskId: string, targetListId: string, targetIndex: number) {
   const next = [...tasks];
   const movingIndex = next.findIndex((task) => task.id === taskId);
@@ -95,6 +114,14 @@ function formatFileSize(size: number) {
   return `${mb.toFixed(2)} MB`;
 }
 
+function getTaskProgress(task: Task) {
+  return Math.max(0, Math.min(100, task.progress ?? 0));
+}
+
+function getPriorityClass(priority?: Task["priority"]) {
+  return `priority-badge priority-${(priority ?? "Low").toLowerCase()}`;
+}
+
 function TaskCard({
   task,
   selected,
@@ -121,7 +148,15 @@ function TaskCard({
       {...listeners}
     >
       <p>{task.title}</p>
-      <small className="muted-text">{task.assignee?.username ? `@${task.assignee.username}` : "Unassigned"}</small>
+      <small className="task-card-progress-label">Progress</small>
+      <div className="task-card-progress" aria-label={`Progress ${getTaskProgress(task)}%`}>
+        <span style={{ width: `${getTaskProgress(task)}%` }} />
+      </div>
+      <div className="task-card-meta">
+        <small className="muted-text">{getTaskProgress(task)}%</small>
+        <span className={getPriorityClass(task.priority)}>{task.priority ?? "Low"}</span>
+      </div>
+      {task.assignee?.username ? <small className="muted-text">@{task.assignee.username}</small> : null}
       <button
         type="button"
         className="task-card-delete"
@@ -200,6 +235,8 @@ export function BoardPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [descriptionDraft, setDescriptionDraft] = useState("");
+  const [progressDraft, setProgressDraft] = useState(0);
+  const [priorityDraft, setPriorityDraft] = useState<Task["priority"]>("Low");
   const [newComment, setNewComment] = useState("");
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
@@ -259,6 +296,8 @@ export function BoardPage() {
 
   useEffect(() => {
     setDescriptionDraft(selectedTask?.description ?? "");
+    setProgressDraft(selectedTask ? getTaskProgress(selectedTask) : 0);
+    setPriorityDraft(selectedTask?.priority ?? "Low");
     setAttachmentFile(null);
     setAttachmentError(null);
   }, [selectedTask]);
@@ -282,7 +321,7 @@ export function BoardPage() {
     });
 
     Object.keys(map).forEach((listId) => {
-      map[listId] = sortByPosition(map[listId]);
+      map[listId] = sortByPriorityThenPosition(map[listId]);
     });
 
     return map;
@@ -322,14 +361,18 @@ export function BoardPage() {
   });
 
   const updateTaskMutation = useMutation({
-    mutationFn: (payload: { taskId: string; description: string }) =>
-      taskApi.update(payload.taskId, { description: payload.description }),
+    mutationFn: (payload: { taskId: string; description?: string; progress?: number; priority?: Task["priority"] }) =>
+      taskApi.update(payload.taskId, {
+        description: payload.description,
+        progress: payload.progress,
+        priority: payload.priority,
+      }),
     onSuccess: async (updatedTask) => {
       setError(null);
       setLocalTasks((prev) => prev.map((task) => (task.id === updatedTask.id ? { ...task, ...updatedTask } : task)));
       await queryClient.invalidateQueries({ queryKey: queryKeys.board.tasks(currentGroupId as string) });
     },
-    onError: () => setError("Could not update description."),
+    onError: () => setError("Could not update task."),
   });
 
   const deleteTaskMutation = useMutation({
@@ -470,6 +513,32 @@ export function BoardPage() {
     updateTaskMutation.mutate({
       taskId: selectedTask.id,
       description: descriptionDraft.trim(),
+    });
+  };
+
+  const onSaveProgress = (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!selectedTask) {
+      return;
+    }
+
+    updateTaskMutation.mutate({
+      taskId: selectedTask.id,
+      progress: progressDraft,
+    });
+  };
+
+  const onSavePriority = (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!selectedTask) {
+      return;
+    }
+
+    updateTaskMutation.mutate({
+      taskId: selectedTask.id,
+      priority: priorityDraft,
     });
   };
 
@@ -628,6 +697,58 @@ export function BoardPage() {
                 <h4>Thong tin</h4>
                 <p className="muted-text">Ngay tao: {formatDate(selectedTask.createdAt)}</p>
                 <p className="muted-text">Nguoi tao: {selectedTask.creator?.username ?? "Chua co du lieu tu API"}</p>
+                <form className="task-progress-form" onSubmit={onSaveProgress}>
+                  <div className="task-progress-summary">
+                    <span>{progressDraft}%</span>
+                  </div>
+                  <div className="task-progress-bar" aria-label={`Progress ${progressDraft}%`}>
+                    <span style={{ width: `${progressDraft}%` }} />
+                  </div>
+                  <label>
+                    Progress
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={progressDraft}
+                      onChange={(event) => setProgressDraft(Number(event.target.value))}
+                    />
+                  </label>
+                  <div className="task-progress-controls">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={progressDraft}
+                      onChange={(event) => {
+                        const nextValue = Math.max(0, Math.min(100, Number(event.target.value)));
+                        setProgressDraft(Number.isNaN(nextValue) ? 0 : nextValue);
+                      }}
+                    />
+                    <button type="submit" disabled={updateTaskMutation.isPending}>
+                      {updateTaskMutation.isPending ? "Saving..." : "Save progress"}
+                    </button>
+                  </div>
+                </form>
+                <form className="task-priority-form" onSubmit={onSavePriority}>
+                  <label>
+                    Priority
+                    <select
+                      value={priorityDraft}
+                      onChange={(event) => setPriorityDraft(event.target.value as Task["priority"])}
+                    >
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                      <option value="Done">Done</option>
+                    </select>
+                  </label>
+                  <span className={getPriorityClass(priorityDraft)}>{priorityDraft}</span>
+                  <button type="submit" disabled={updateTaskMutation.isPending}>
+                    {updateTaskMutation.isPending ? "Saving..." : "Save priority"}
+                  </button>
+                </form>
                 <form className="task-detail-form" onSubmit={onSaveDescription}>
                   <textarea
                     value={descriptionDraft}

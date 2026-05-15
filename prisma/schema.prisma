@@ -69,6 +69,8 @@ model Task {
   assignedTo  String?
   createdBy   String?
   dueDate     DateTime?
+  progress    Int      @default(0)
+  priority    String   @default("Low")
   createdAt   DateTime @default(now())
 
   group    Group @relation(fields: [groupId], references: [id])
