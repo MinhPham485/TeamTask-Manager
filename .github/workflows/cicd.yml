@@ -98,8 +98,12 @@ jobs:
             git fetch --all --prune
             git checkout main
             git pull --ff-only origin main
-
+            
             touch .env.docker
+            
+            # delete existing GCS_PRIVATE_KEY
+            awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/{ if ($1 != "GCS_PRIVATE_KEY") print }' .env.docker > .env.docker.tmp && mv .env.docker.tmp .env.docker
+
             set_env() {
               key="$1"
               value="$2"
@@ -120,7 +124,11 @@ jobs:
             set_env GCS_PROJECT_ID "taskupload-496308"
             set_env GCS_BUCKET "teamtaskmanager-demo-bucket"
             set_env GCS_CLIENT_EMAIL "upload-service@taskupload-496308.iam.gserviceaccount.com"
-            set_env GCS_PRIVATE_KEY '"${{ secrets.GCS_PRIVATE_KEY }}"'
+            gcs_private_key_base64=$(cat <<'GCS_PRIVATE_KEY_EOF' | base64 | tr -d '\n'
+            ${{ secrets.GCS_PRIVATE_KEY }}
+            GCS_PRIVATE_KEY_EOF
+            )
+            set_env GCS_PRIVATE_KEY_BASE64 "$gcs_private_key_base64"
             set_env GCS_PUBLIC_BASE_URL "https://storage.googleapis.com/teamtaskmanager-demo-bucket"
 
             echo "===> starting docker compose"

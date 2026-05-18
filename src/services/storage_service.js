@@ -6,12 +6,20 @@ const getEmulatorHost = () => {
     return normalizeHost(process.env.GCS_EMULATOR_HOST || process.env.STORAGE_EMULATOR_HOST || '');
 };
 
+const getPrivateKey = () => {
+    if (process.env.GCS_PRIVATE_KEY_BASE64) {
+        return Buffer.from(process.env.GCS_PRIVATE_KEY_BASE64, 'base64').toString('utf8');
+    }
+
+    return process.env.GCS_PRIVATE_KEY
+        ? process.env.GCS_PRIVATE_KEY.replace(/\\n/g, '\n')
+        : undefined;
+};
+
 const buildStorageClient = () => {
     const projectId = process.env.GCS_PROJECT_ID;
     const clientEmail = process.env.GCS_CLIENT_EMAIL;
-    const privateKey = process.env.GCS_PRIVATE_KEY
-        ? process.env.GCS_PRIVATE_KEY.replace(/\\n/g, '\n')
-        : undefined;
+    const privateKey = getPrivateKey();
 
     const credentials = clientEmail && privateKey
         ? {client_email: clientEmail, private_key: privateKey}
