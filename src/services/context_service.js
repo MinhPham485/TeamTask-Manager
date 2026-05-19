@@ -35,6 +35,8 @@ const buildGroupContext = async ({prisma, groupId, taskLimit = DEFAULT_TASK_LIMI
                     description: true,
                     dueDate: true,
                     assignedTo: true,
+                    progress: true,
+                    priority: true,
                     assignee: {
                         select: {
                             username: true
@@ -70,8 +72,10 @@ const buildGroupContext = async ({prisma, groupId, taskLimit = DEFAULT_TASK_LIMI
         const creator = task.creator?.username || 'unknown';
         const listName = task.list?.name || 'unknown';
         const description = task.description?.trim() || 'none';
+        const progress = Number.isInteger(task.progress) ? task.progress : 0;
+        const priority = task.priority || 'Low';
 
-        return `- [${listName}] ${task.title} | assignee: ${assignee} | creator: ${creator} | due: ${formatDate(task.dueDate)} | description: ${description}`;
+        return `- [${listName}] ${task.title} | priority: ${priority} | progress: ${progress}% | assignee: ${assignee} | creator: ${creator} | due: ${formatDate(task.dueDate)} | description: ${description}`;
     });
 
     const tasksWithStatus = group.tasks.map((task) => {
@@ -82,6 +86,8 @@ const buildGroupContext = async ({prisma, groupId, taskLimit = DEFAULT_TASK_LIMI
             title: task.title,
             description: task.description?.trim() || null,
             listName,
+            progress: Number.isInteger(task.progress) ? task.progress : 0,
+            priority: task.priority || 'Low',
             assignee: task.assignee?.username || 'unassigned',
             creator: task.creator?.username || 'unknown',
             dueDate: formatDate(task.dueDate),
