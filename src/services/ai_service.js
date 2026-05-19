@@ -3,6 +3,7 @@ const {buildGroupContext} = require('./context_service');
 
 const prisma = new PrismaClient();
 const DEFAULT_MODEL = 'llama-3.1-8b-instant';
+const PRIORITY_ORDER = ['High', 'Medium', 'Low', 'Done'];
 
 const isAiFeatureEnabled = () => {
     const value = String(process.env.AI_FEATURE_ENABLED || 'false').toLowerCase();
@@ -191,6 +192,150 @@ const asksTaskCreator = (question) => {
     );
 };
 
+const formatTaskList = (tasks, formatter) => {
+    if (tasks.length === 0) {
+        return '';
+    }
+
+    return tasks.slice(0, 5).map(formatter).join('; ');
+};
+
+const asksPriorityQuestion = (question) => {
+    const normalizedQuestion = normalizeText(question);
+
+    return (
+        normalizedQuestion.includes('priority') ||
+        normalizedQuestion.includes('priorities') ||
+        normalizedQuestion.includes('uu tien') ||
+        normalizedQuestion.includes('high priority') ||
+        normalizedQuestion.includes('highest priority')
+    );
+};
+
+const getRequestedPriority = (question) => {
+    const normalizedQuestion = normalizeText(question);
+
+    if (normalizedQuestion.includes('high') || normalizedQuestion.includes('cao')) {
+        return 'High';
+    }
+
+    if (normalizedQuestion.includes('medium') || normalizedQuestion.includes('trung binh')) {
+        return 'Medium';
+    }
+
+    if (normalizedQuestion.includes('low') || normalizedQuestion.includes('thap')) {
+        return 'Low';
+    }
+
+    if (normalizedQuestion.includes('done') || normalizedQuestion.includes('xong') || normalizedQuestion.includes('hoan thanh')) {
+        return 'Done';
+    }
+
+    return null;
+};
+
+const buildPriorityAnswer = ({question, tasks, groupId, userId}) => {
+    if (!asksPriorityQuestion(question)) {
+        return null;
+    }
+
+    const requestedPriority = getRequestedPriority(question);
+    const targetPriority = requestedPriority || PRIORITY_ORDER.find((priority) => tasks.some((task) => task.priority === priority)) || 'High';
+    const matchingTasks = tasks.filter((task) => task.priority === targetPriority);
+    const details = formatTaskList(
+        matchingTasks,
+        (task) => `${task.title} (${task.progress}% progress, ${task.listName})`
+    );
+
+    const answer = details
+        ? `${targetPriority} priority tasks: ${details}.`
+        : `No ${targetPriority} priority tasks found in this group.`;
+
+    return {
+        data: {
+            answer,
+            suggestions: [],
+            meta: {
+                groupId,
+                userId,
+                questionLength: question.length,
+                source: 'rule-based-priority',
+                model: 'none'
+            }
+        },
+        status: 200
+    };
+};
+
+const asksProgressQuestion = (question) => {
+    const normalizedQuestion = normalizeText(question);
+
+    return (
+        normalizedQuestion.includes('progress') ||
+        normalizedQuestion.includes('percent') ||
+        normalizedQuestion.includes('percentage') ||
+        normalizedQuestion.includes('%') ||
+        normalizedQuestion.includes('phan tram') ||
+        normalizedQuestion.includes('tien do')
+    );
+};
+
+const extractProgressThreshold = (question) => {
+    const match = String(question || '').match(/(?:over|above|more than|greater than|>=|at least|tren|hon|tu)\s*(\d{1,3})\s*%?/i);
+
+    if (!match) {
+        return null;
+    }
+
+    const threshold = Number(match[1]);
+
+    if (!Number.isInteger(threshold)) {
+        return null;
+    }
+
+    return Math.max(0, Math.min(100, threshold));
+};
+
+const buildProgressAnswer = ({question, tasks, groupId, userId}) => {
+    if (!asksProgressQuestion(question)) {
+        return null;
+    }
+
+    const threshold = extractProgressThreshold(question);
+    const sortedTasks = [...tasks].sort((firstTask, secondTask) => secondTask.progress - firstTask.progress);
+    const matchingTasks = threshold === null
+        ? sortedTasks
+        : sortedTasks.filter((task) => task.progress >= threshold);
+
+    const details = formatTaskList(
+        matchingTasks,
+        (task) => `${task.title} (${task.progress}%, ${task.priority} priority, ${task.listName})`
+    );
+
+    const answer = details
+        ? threshold === null
+            ? `Highest progress tasks: ${details}.`
+            : `Tasks at or above ${threshold}% progress: ${details}.`
+        : threshold === null
+            ? 'No tasks with progress data found in this group.'
+            : `No tasks found at or above ${threshold}% progress.`;
+
+    return {
+        data: {
+            answer,
+            suggestions: [],
+            meta: {
+                groupId,
+                userId,
+                questionLength: question.length,
+                source: 'rule-based-progress',
+                model: 'none'
+            }
+        },
+        status: 200
+    };
+};
+
 const buildTaskDetailAnswer = ({question, tasks, groupId, userId}) => {
     const needsAssignee = asksTaskAssignee(question);
     const needsDescription = asksTaskDescription(question);
@@ -275,31 +420,10 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
         };
     }
 
-    const {apiKey, model} = getProviderConfig();
     const groupName = contextResult.data.groupName || 'this group';
-
-    if (!apiKey) {
-        if (!canUseMockWithoutKey()) {
-            return {
-                error: {
-                    code: 'AI_NOT_CONFIGURED',
-                    message: 'GROQ_API_KEY is not configured'
-                },
-                status: 503
-            };
-        }
-
-        return buildMockResponse({
-            groupName,
-            question,
-            groupId,
-            userId,
-            questionLength: question.length
-        });
-    }
-
     const contextText = contextResult.data.contextText;
     const metrics = contextResult.data.metrics;
+    const tasks = contextResult.data.tasks || [];
     const unfinishedTaskTitles = (contextResult.data.tasks || [])
         .filter((task) => !task.isDone)
         .slice(0, 5)
@@ -307,13 +431,35 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
 
     const taskDetailResult = buildTaskDetailAnswer({
         question,
-        tasks: contextResult.data.tasks || [],
+        tasks,
         groupId,
         userId
     });
 
     if (taskDetailResult) {
         return taskDetailResult;
+    }
+
+    const priorityResult = buildPriorityAnswer({
+        question,
+        tasks,
+        groupId,
+        userId
+    });
+
+    if (priorityResult) {
+        return priorityResult;
+    }
+
+    const progressResult = buildProgressAnswer({
+        question,
+        tasks,
+        groupId,
+        userId
+    });
+
+    if (progressResult) {
+        return progressResult;
     }
 
     if (isUnfinishedCountQuestion(question)) {
@@ -333,6 +479,28 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
             },
             status: 200
         };
+    }
+
+    const {apiKey, model} = getProviderConfig();
+
+    if (!apiKey) {
+        if (!canUseMockWithoutKey()) {
+            return {
+                error: {
+                    code: 'AI_NOT_CONFIGURED',
+                    message: 'GROQ_API_KEY is not configured'
+                },
+                status: 503
+            };
+        }
+
+        return buildMockResponse({
+            groupName,
+            question,
+            groupId,
+            userId,
+            questionLength: question.length
+        });
     }
 
     const prompt = [

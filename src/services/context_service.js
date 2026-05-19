@@ -1,4 +1,4 @@
-const DEFAULT_TASK_LIMIT = 20;
+const DEFAULT_TASK_LIMIT = 100;
 
 const isDoneList = (listName) => {
     const normalized = String(listName || '').trim().toLowerCase();
@@ -115,7 +115,7 @@ const buildGroupContext = async ({prisma, groupId, taskLimit = DEFAULT_TASK_LIMI
             contextText: [
                 `Group: ${group.name}`,
                 `Task stats: total=${metrics.totalTasks}, done=${metrics.doneTasks}, unfinished=${metrics.unfinishedTasks}, unassigned_unfinished=${metrics.unassignedUnfinishedTasks}, overdue_unfinished=${metrics.overdueUnfinishedTasks}`,
-                `Recent tasks (${group.tasks.length}):`,
+                `Tasks included (${group.tasks.length}):`,
                 taskLines.length ? taskLines.join('\n') : '- No tasks available'
             ].join('\n')
         },
