@@ -623,6 +623,13 @@ export function ChatPage() {
   const visibleMessages = chatMode === "direct" ? directMessages : groupMessages;
 
   const threadTitle = chatMode === "direct" ? activeDirectContact?.user?.username ?? "Chat" : activeGroup?.group.name ?? "Group";
+  const threadSubtitle =
+    chatMode === "direct"
+      ? activeDirectContact?.user?.email ?? "Direct message"
+      : activeGroup
+        ? `${activeGroup.role} in this group`
+        : "Group conversation";
+  const threadKind = chatMode === "direct" ? "Direct" : "Group";
 
   return (
     <section className="chat-page messenger-layout">
@@ -686,7 +693,12 @@ export function ChatPage() {
             <span className="messenger-avatar large">{getGroupInitial(threadTitle)}</span>
             <div>
               <h3>{threadTitle}</h3>
+              <p>{threadSubtitle}</p>
             </div>
+          </div>
+          <div className="messenger-thread-actions">
+            <span className="conversation-kind">{threadKind}</span>
+            <span className={socketStatus === "connected" ? "chat-status online" : "chat-status"}>{socketStatus}</span>
           </div>
         </header>
 
@@ -699,22 +711,32 @@ export function ChatPage() {
           {chatMode === "group" && messagesQuery.isLoading ? <p className="muted-text">Loading messages...</p> : null}
           {chatMode === "direct" && directMessagesQuery.isLoading ? <p className="muted-text">Loading messages...</p> : null}
           {chatMode === "group" && !messagesQuery.isLoading && !messagesQuery.isError && visibleMessages.length === 0 ? (
-            <p className="muted-text">No messages yet. Start the conversation.</p>
+            <div className="messenger-empty-state">
+              <span className="messenger-avatar large">{getGroupInitial(threadTitle)}</span>
+              <h3>No messages yet</h3>
+              <p className="muted-text">Start the conversation with this group.</p>
+            </div>
           ) : null}
           {chatMode === "direct" && !directMessagesQuery.isLoading && !directMessagesQuery.isError && visibleMessages.length === 0 ? (
-            <p className="muted-text">No messages yet. Start the conversation.</p>
+            <div className="messenger-empty-state">
+              <span className="messenger-avatar large">{getGroupInitial(threadTitle)}</span>
+              <h3>No messages yet</h3>
+              <p className="muted-text">Send the first direct message.</p>
+            </div>
           ) : null}
 
           {visibleMessages.map((message) => {
             const isMine = message.senderId === currentUser?.id;
             const attachments = "attachments" in message ? message.attachments : undefined;
+            const senderName = getSenderName(message);
 
             return (
               <article key={message.id} className={isMine ? "messenger-message mine" : "messenger-message"}>
                 <p className={isMine ? "messenger-message-meta mine" : "messenger-message-meta"}>{formatTime(message.createdAt)}</p>
+                {!isMine ? <span className="messenger-message-avatar">{getGroupInitial(senderName)}</span> : null}
                 <div className={isMine ? "messenger-bubble mine" : "messenger-bubble"}>
                   <header>
-                    <strong>{getSenderName(message)}</strong>
+                    <strong>{senderName}</strong>
                   </header>
                   <p>{message.content}</p>
                   {attachments?.length ? (
