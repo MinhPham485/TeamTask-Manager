@@ -6,6 +6,7 @@ import { queryKeys } from "@/shared/query/queryKeys";
 
 export function FloatingAiChat() {
   const queryClient = useQueryClient();
+  const currentGroupId = authStore((state) => state.currentGroupId);
   const setCurrentGroup = authStore((state) => state.setCurrentGroup);
   const [isOpen, setIsOpen] = useState(false);
   const [question, setQuestion] = useState("");
@@ -13,7 +14,7 @@ export function FloatingAiChat() {
   const [error, setError] = useState<string | null>(null);
 
   const askMutation = useMutation({
-    mutationFn: (payload: { question: string }) => aiApi.askAssistant(payload),
+    mutationFn: (payload: { question: string; groupId?: string }) => aiApi.askAssistant(payload),
     onSuccess: async (data) => {
       const normalizedQuestion = question.trim();
 
@@ -75,6 +76,7 @@ export function FloatingAiChat() {
 
     askMutation.mutate({
       question: normalized,
+      groupId: currentGroupId || undefined,
     });
   };
 
