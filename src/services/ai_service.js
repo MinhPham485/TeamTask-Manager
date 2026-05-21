@@ -336,6 +336,118 @@ const buildProgressAnswer = ({question, tasks, groupId, userId}) => {
     };
 };
 
+const asksGroupSummaryQuestion = (question) => {
+    const normalizedQuestion = normalizeText(question);
+
+    return (
+        normalizedQuestion.includes('summary') ||
+        normalizedQuestion.includes('summarize') ||
+        normalizedQuestion.includes('overview') ||
+        normalizedQuestion.includes('group overview') ||
+        normalizedQuestion.includes('dashboard summary') ||
+        normalizedQuestion.includes('tom tat') ||
+        normalizedQuestion.includes('tom luoc') ||
+        normalizedQuestion.includes('tong hop') ||
+        normalizedQuestion.includes('tong ket') ||
+        normalizedQuestion.includes('tong quan')
+    );
+};
+
+const getAverageProgress = (tasks) => {
+    if (tasks.length === 0) {
+        return 0;
+    }
+
+    const totalProgress = tasks.reduce((total, task) => total + task.progress, 0);
+
+    return Math.round(totalProgress / tasks.length);
+};
+
+const countByPriority = (tasks) => {
+    return PRIORITY_ORDER.reduce((result, priority) => {
+        result[priority] = tasks.filter((task) => task.priority === priority).length;
+        return result;
+    }, {});
+};
+
+const pickFocusTask = (tasks) => {
+    return tasks.find((task) => task.priority === 'High' && !task.isDone)
+        || tasks.find((task) => !task.isDone)
+        || tasks[0]
+        || null;
+};
+
+const pickFollowUpTask = (tasks) => {
+    const today = new Date();
+    const overdueTask = tasks.find((task) => task.dueDate !== 'none' && new Date(task.dueDate) < today && !task.isDone);
+
+    return overdueTask
+        || tasks.find((task) => task.assignee === 'unassigned' && !task.isDone)
+        || null;
+};
+
+const pickNearCompletionTask = (tasks) => {
+    return [...tasks]
+        .filter((task) => !task.isDone)
+        .sort((firstTask, secondTask) => secondTask.progress - firstTask.progress)[0] || null;
+};
+
+const buildGroupSummaryAnswer = ({question, groupName, metrics, tasks, groupId, userId}) => {
+    if (!asksGroupSummaryQuestion(question)) {
+        return null;
+    }
+
+    const priorityCounts = countByPriority(tasks);
+    const averageProgress = getAverageProgress(tasks);
+    const nearCompletionCount = tasks.filter((task) => task.progress >= 80 && !task.isDone).length;
+    const earlyProgressCount = tasks.filter((task) => task.progress < 30 && !task.isDone).length;
+    const focusTask = pickFocusTask(tasks);
+    const followUpTask = pickFollowUpTask(tasks);
+    const nearCompletionTask = pickNearCompletionTask(tasks);
+
+    const answer = [
+        `Group Summary: ${groupName}`,
+        '',
+        'Overview',
+        `- Total tasks: ${metrics.totalTasks}`,
+        `- Done: ${metrics.doneTasks}`,
+        `- Unfinished: ${metrics.unfinishedTasks}`,
+        `- Overdue: ${metrics.overdueUnfinishedTasks}`,
+        `- Unassigned: ${metrics.unassignedUnfinishedTasks}`,
+        '',
+        'Priority Focus',
+        `- High: ${priorityCounts.High || 0} tasks`,
+        `- Medium: ${priorityCounts.Medium || 0} tasks`,
+        `- Low: ${priorityCounts.Low || 0} tasks`,
+        `- Done priority: ${priorityCounts.Done || 0} tasks`,
+        '',
+        'Progress',
+        `- Average progress: ${averageProgress}%`,
+        `- Near completion: ${nearCompletionCount} tasks at 80%+`,
+        `- Stuck/early: ${earlyProgressCount} tasks under 30%`,
+        '',
+        'Recommended Next Steps',
+        `1. Focus on: ${focusTask ? `${focusTask.title} (${focusTask.priority}, ${focusTask.progress}%)` : 'No task available'}`,
+        `2. Follow up on: ${followUpTask ? `${followUpTask.title} (${followUpTask.assignee}, due ${followUpTask.dueDate})` : 'No overdue or unassigned task found'}`,
+        `3. Move forward: ${nearCompletionTask ? `${nearCompletionTask.title} (${nearCompletionTask.progress}% complete)` : 'No active task found'}`
+    ].join('\n');
+
+    return {
+        data: {
+            answer,
+            suggestions: [],
+            meta: {
+                groupId,
+                userId,
+                questionLength: question.length,
+                source: 'rule-based-group-summary',
+                model: 'none'
+            }
+        },
+        status: 200
+    };
+};
+
 const buildTaskDetailAnswer = ({question, tasks, groupId, userId}) => {
     const needsAssignee = asksTaskAssignee(question);
     const needsDescription = asksTaskDescription(question);
@@ -438,6 +550,19 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
 
     if (taskDetailResult) {
         return taskDetailResult;
+    }
+
+    const groupSummaryResult = buildGroupSummaryAnswer({
+        question,
+        groupName,
+        metrics,
+        tasks,
+        groupId,
+        userId
+    });
+
+    if (groupSummaryResult) {
+        return groupSummaryResult;
     }
 
     const priorityResult = buildPriorityAnswer({
