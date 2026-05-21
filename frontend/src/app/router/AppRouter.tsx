@@ -6,8 +6,9 @@ import { RegisterPage } from "@/pages/RegisterPage";
 import { ForgotPasswordPage } from "@/pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "@/pages/ResetPasswordPage";
 import { DashboardPage } from "@/pages/DashboardPage";
-import { WorkspacePage } from "@/pages/WorkspacePage";
 import { GroupDetailPage } from "@/pages/GroupDetailPage";
+import { BoardPage } from "@/pages/BoardPage";
+import { ChatPage } from "@/pages/ChatPage";
 
 export function AppRouter() {
   return (
@@ -48,7 +49,7 @@ export function AppRouter() {
           path="/workspace"
           element={
             <AppShell>
-              <WorkspacePage />
+              <Navigate to="/board" replace />
             </AppShell>
           }
         />
@@ -56,7 +57,7 @@ export function AppRouter() {
           path="/board"
           element={
             <AppShell>
-              <Navigate to="/workspace?tab=board" replace />
+              <BoardPage />
             </AppShell>
           }
         />
@@ -64,7 +65,7 @@ export function AppRouter() {
           path="/chat"
           element={
             <AppShell>
-              <Navigate to="/workspace?tab=chat" replace />
+              <ChatPage />
             </AppShell>
           }
         />

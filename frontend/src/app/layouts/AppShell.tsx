@@ -7,7 +7,8 @@ import { FloatingAiChat } from "@/features/chat/components/FloatingAiChat";
 
 const navItems = [
   { to: "/dashboard", label: "Groups" },
-  { to: "/workspace", label: "Workspace" },
+  { to: "/board", label: "Dashboard" },
+  { to: "/chat", label: "Chat" },
 ];
 
 export function AppShell({ children }: PropsWithChildren) {
