@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DndContext, DragEndEvent, DragStartEvent, PointerSensor, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { checklistApi } from "@/features/board/api/checklistApi";
 import { commentApi } from "@/features/board/api/commentApi";
 import { listApi } from "@/features/board/api/listApi";
 import { taskApi } from "@/features/board/api/taskApi";
@@ -11,7 +12,7 @@ import { groupApi } from "@/features/groups/api/groupApi";
 import { authStore } from "@/features/auth/store/authStore";
 import { queryKeys } from "@/shared/query/queryKeys";
 import { uploadApi } from "@/shared/api/uploadApi";
-import { Attachment, List, Task } from "@/shared/types/models";
+import { Attachment, ChecklistItem, List, Task } from "@/shared/types/models";
 
 const MAX_FILE_SIZE = 3 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set([
@@ -122,6 +123,14 @@ function getPriorityClass(priority?: Task["priority"]) {
   return `priority-badge priority-${(priority ?? "Low").toLowerCase()}`;
 }
 
+function getChecklistSummary(items?: ChecklistItem[]) {
+  const total = items?.length ?? 0;
+  const completed = items?.filter((item) => item.isCompleted).length ?? 0;
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  return { completed, percent, total };
+}
+
 function TaskCard({
   task,
   selected,
@@ -134,6 +143,7 @@ function TaskCard({
   onDelete: (taskId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+  const checklistSummary = getChecklistSummary(task.checklistItems);
 
   return (
     <article
@@ -156,6 +166,14 @@ function TaskCard({
         <small className="muted-text">{getTaskProgress(task)}%</small>
         <span className={getPriorityClass(task.priority)}>{task.priority ?? "Low"}</span>
       </div>
+      {checklistSummary.total > 0 ? (
+        <div className="task-card-checklist" aria-label={`Checklist ${checklistSummary.completed} of ${checklistSummary.total}`}>
+          <span>Checklist</span>
+          <strong>
+            {checklistSummary.completed}/{checklistSummary.total}
+          </strong>
+        </div>
+      ) : null}
       {task.assignee?.username ? <small className="muted-text">@{task.assignee.username}</small> : null}
       <button
         type="button"
@@ -238,6 +256,7 @@ export function BoardPage() {
   const [progressDraft, setProgressDraft] = useState(0);
   const [priorityDraft, setPriorityDraft] = useState<Task["priority"]>("Low");
   const [newComment, setNewComment] = useState("");
+  const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [attachmentUploading, setAttachmentUploading] = useState(false);
@@ -272,6 +291,12 @@ export function BoardPage() {
     enabled: Boolean(selectedTaskId),
   });
 
+  const checklistQuery = useQuery({
+    queryKey: selectedTaskId ? queryKeys.checklists.byTask(selectedTaskId) : ["checklists", "missing"],
+    queryFn: () => checklistApi.getByTask(selectedTaskId as string),
+    enabled: Boolean(selectedTaskId),
+  });
+
   useEffect(() => {
     if (!currentGroupId && groupsQuery.data?.length) {
       setCurrentGroup(groupsQuery.data[0].group.id);
@@ -298,9 +323,14 @@ export function BoardPage() {
     setDescriptionDraft(selectedTask?.description ?? "");
     setProgressDraft(selectedTask ? getTaskProgress(selectedTask) : 0);
     setPriorityDraft(selectedTask?.priority ?? "Low");
+    setNewChecklistTitle("");
     setAttachmentFile(null);
     setAttachmentError(null);
   }, [selectedTask]);
+
+  const checklistSummary = useMemo(() => {
+    return getChecklistSummary(checklistQuery.data ?? selectedTask?.checklistItems);
+  }, [checklistQuery.data, selectedTask?.checklistItems]);
 
   const sortedLists = useMemo(() => {
     return listsQuery.data ? sortByPosition(listsQuery.data) : [];
@@ -409,6 +439,44 @@ export function BoardPage() {
     onError: () => setError("Could not delete comment."),
   });
 
+  const refreshChecklist = async (taskId: string) => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.checklists.byTask(taskId) }),
+      currentGroupId
+        ? queryClient.invalidateQueries({ queryKey: queryKeys.board.tasks(currentGroupId) })
+        : Promise.resolve(),
+    ]);
+  };
+
+  const createChecklistMutation = useMutation({
+    mutationFn: (payload: { taskId: string; title: string }) => checklistApi.create(payload),
+    onSuccess: async (_, payload) => {
+      setError(null);
+      setNewChecklistTitle("");
+      await refreshChecklist(payload.taskId);
+    },
+    onError: () => setError("Could not add checklist item."),
+  });
+
+  const toggleChecklistMutation = useMutation({
+    mutationFn: (payload: { itemId: string; taskId: string; isCompleted: boolean }) =>
+      checklistApi.toggle(payload.itemId, payload.isCompleted),
+    onSuccess: async (_, payload) => {
+      setError(null);
+      await refreshChecklist(payload.taskId);
+    },
+    onError: () => setError("Could not update checklist item."),
+  });
+
+  const deleteChecklistMutation = useMutation({
+    mutationFn: (payload: { itemId: string; taskId: string }) => checklistApi.remove(payload.itemId),
+    onSuccess: async (_, payload) => {
+      setError(null);
+      await refreshChecklist(payload.taskId);
+    },
+    onError: () => setError("Could not delete checklist item."),
+  });
+
   const onCreateList = (event: FormEvent) => {
     event.preventDefault();
 
@@ -501,6 +569,22 @@ export function BoardPage() {
     }
 
     createCommentMutation.mutate({ taskId: selectedTask.id, content });
+  };
+
+  const onCreateChecklistItem = (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!selectedTask) {
+      return;
+    }
+
+    const title = newChecklistTitle.trim();
+    if (!title) {
+      setError("Checklist item title is required.");
+      return;
+    }
+
+    createChecklistMutation.mutate({ taskId: selectedTask.id, title });
   };
 
   const onSaveDescription = (event: FormEvent) => {
@@ -760,6 +844,64 @@ export function BoardPage() {
                     {updateTaskMutation.isPending ? "Saving..." : "Save description"}
                   </button>
                 </form>
+              </section>
+
+              <section className="task-detail-section">
+                <div className="task-section-heading">
+                  <h4>Checklist</h4>
+                  <span>
+                    {checklistSummary.completed}/{checklistSummary.total}
+                  </span>
+                </div>
+                <div className="task-checklist-progress" aria-label={`Checklist progress ${checklistSummary.percent}%`}>
+                  <span style={{ width: `${checklistSummary.percent}%` }} />
+                </div>
+                <form className="task-detail-inline" onSubmit={onCreateChecklistItem}>
+                  <input
+                    value={newChecklistTitle}
+                    onChange={(event) => setNewChecklistTitle(event.target.value)}
+                    placeholder="Add checklist item"
+                    maxLength={160}
+                  />
+                  <button type="submit" disabled={createChecklistMutation.isPending}>
+                    {createChecklistMutation.isPending ? "Adding..." : "Add"}
+                  </button>
+                </form>
+
+                {checklistQuery.isLoading ? <p className="muted-text">Loading checklist...</p> : null}
+                {checklistQuery.isError ? <p className="error-text">Could not load checklist.</p> : null}
+                {!checklistQuery.isLoading && !checklistQuery.isError && (checklistQuery.data ?? []).length === 0 ? (
+                  <p className="muted-text">No checklist items yet.</p>
+                ) : null}
+                <div className="task-detail-list">
+                  {sortByPosition(checklistQuery.data ?? []).map((item) => (
+                    <article key={item.id} className={item.isCompleted ? "task-detail-list-item completed" : "task-detail-list-item"}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={item.isCompleted}
+                          onChange={(event) =>
+                            toggleChecklistMutation.mutate({
+                              itemId: item.id,
+                              taskId: item.taskId,
+                              isCompleted: event.target.checked,
+                            })
+                          }
+                          disabled={toggleChecklistMutation.isPending}
+                        />
+                        <span>{item.title}</span>
+                      </label>
+                      <button
+                        type="button"
+                        className="danger-button"
+                        onClick={() => deleteChecklistMutation.mutate({ itemId: item.id, taskId: item.taskId })}
+                        disabled={deleteChecklistMutation.isPending}
+                      >
+                        Delete
+                      </button>
+                    </article>
+                  ))}
+                </div>
               </section>
 
               <section className="task-detail-section">

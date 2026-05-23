@@ -515,6 +515,26 @@ a {
   margin-top: 0.4rem;
 }
 
+.task-card-checklist {
+  margin-top: 0.45rem;
+  min-height: 26px;
+  border-radius: 6px;
+  border: 1px solid #d0d5dd;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  padding: 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.task-card-checklist strong {
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
 .priority-badge {
   display: inline-flex;
   align-items: center;
@@ -654,6 +674,37 @@ a {
   margin: 0;
 }
 
+.task-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.task-section-heading h4 {
+  margin: 0;
+}
+
+.task-section-heading span {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.task-checklist-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.task-checklist-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1469ff;
+}
+
 .task-progress-form {
   display: grid;
   gap: 0.55rem;
@@ -775,6 +826,21 @@ a {
   display: flex;
   gap: 0.4rem;
   align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+
+.task-detail-list-item input[type="checkbox"] {
+  flex: 0 0 auto;
+}
+
+.task-detail-list-item span {
+  overflow-wrap: anywhere;
+}
+
+.task-detail-list-item.completed span {
+  color: var(--muted);
+  text-decoration: line-through;
 }
 
 .task-comment-item {

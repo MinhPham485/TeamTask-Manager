@@ -59,6 +59,7 @@ export type Task = {
   assignee?: User | null;
   creator?: User | null;
   taskLabels?: Array<{ label: Label }>;
+  checklistItems?: ChecklistItem[];
   progress: number;
   priority: "High" | "Medium" | "Low" | "Done";
 };

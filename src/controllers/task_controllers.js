@@ -216,6 +216,11 @@ exports.getTasksByGroup = async (req, res) => {
                             username: true,
                             email: true
                         }
+                    },
+                    checklistItems: {
+                        orderBy: {
+                            position: 'asc'
+                        }
                     }
                 }
             }),
