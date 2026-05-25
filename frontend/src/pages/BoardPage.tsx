@@ -88,17 +88,13 @@ function applyMove(tasks: Task[], taskId: string, targetListId: string, targetIn
   return next;
 }
 
-function formatDate(dateString?: string) {
+function formatDate(dateString?: string | null) {
   if (!dateString) {
     return "Chua co";
   }
 
   const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) {
-    return "Chua co";
-  }
-
-  return date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "Chua co" : date.toLocaleString();
 }
 
 function formatFileSize(size: number) {
@@ -111,8 +107,7 @@ function formatFileSize(size: number) {
     return `${kb.toFixed(1)} KB`;
   }
 
-  const mb = kb / 1024;
-  return `${mb.toFixed(2)} MB`;
+  return `${(kb / 1024).toFixed(2)} MB`;
 }
 
 function getTaskProgress(task: Task) {
@@ -255,8 +250,8 @@ export function BoardPage() {
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [progressDraft, setProgressDraft] = useState(0);
   const [priorityDraft, setPriorityDraft] = useState<Task["priority"]>("Low");
-  const [newComment, setNewComment] = useState("");
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
+  const [newComment, setNewComment] = useState("");
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [attachmentUploading, setAttachmentUploading] = useState(false);
@@ -304,12 +299,12 @@ export function BoardPage() {
   }, [currentGroupId, groupsQuery.data, setCurrentGroup]);
 
   useEffect(() => {
-    setSelectedTaskId(null);
-  }, [currentGroupId]);
-
-  useEffect(() => {
     setLocalTasks(tasksQuery.data ? sortByPosition(tasksQuery.data) : []);
   }, [tasksQuery.data]);
+
+  useEffect(() => {
+    setSelectedTaskId(null);
+  }, [currentGroupId]);
 
   const selectedTask = useMemo(() => {
     if (!selectedTaskId) {
@@ -327,6 +322,21 @@ export function BoardPage() {
     setAttachmentFile(null);
     setAttachmentError(null);
   }, [selectedTask]);
+
+  useEffect(() => {
+    if (!selectedTaskId) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedTaskId(null);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedTaskId]);
 
   const checklistSummary = useMemo(() => {
     return getChecklistSummary(checklistQuery.data ?? selectedTask?.checklistItems);
@@ -390,21 +400,6 @@ export function BoardPage() {
     },
   });
 
-  const updateTaskMutation = useMutation({
-    mutationFn: (payload: { taskId: string; description?: string; progress?: number; priority?: Task["priority"] }) =>
-      taskApi.update(payload.taskId, {
-        description: payload.description,
-        progress: payload.progress,
-        priority: payload.priority,
-      }),
-    onSuccess: async (updatedTask) => {
-      setError(null);
-      setLocalTasks((prev) => prev.map((task) => (task.id === updatedTask.id ? { ...task, ...updatedTask } : task)));
-      await queryClient.invalidateQueries({ queryKey: queryKeys.board.tasks(currentGroupId as string) });
-    },
-    onError: () => setError("Could not update task."),
-  });
-
   const deleteTaskMutation = useMutation({
     mutationFn: (taskId: string) => taskApi.remove(taskId),
     onSuccess: async (_, taskId) => {
@@ -416,6 +411,17 @@ export function BoardPage() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.board.tasks(currentGroupId as string) });
     },
     onError: () => setError("Could not delete task."),
+  });
+
+  const updateTaskMutation = useMutation({
+    mutationFn: (payload: { description?: string; progress?: number; priority?: Task["priority"] }) =>
+      taskApi.update(selectedTaskId as string, payload),
+    onSuccess: async (updatedTask) => {
+      setError(null);
+      setLocalTasks((prev) => prev.map((task) => (task.id === updatedTask.id ? { ...task, ...updatedTask } : task)));
+      await queryClient.invalidateQueries({ queryKey: queryKeys.board.tasks(currentGroupId as string) });
+    },
+    onError: () => setError("Could not update task."),
   });
 
   const createCommentMutation = useMutation({
@@ -442,9 +448,7 @@ export function BoardPage() {
   const refreshChecklist = async (taskId: string) => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.checklists.byTask(taskId) }),
-      currentGroupId
-        ? queryClient.invalidateQueries({ queryKey: queryKeys.board.tasks(currentGroupId) })
-        : Promise.resolve(),
+      currentGroupId ? queryClient.invalidateQueries({ queryKey: queryKeys.board.tasks(currentGroupId) }) : Promise.resolve(),
     ]);
   };
 
@@ -555,20 +559,31 @@ export function BoardPage() {
     });
   };
 
-  const onCreateComment = (event: FormEvent) => {
+  const onDeleteTask = (taskId: string) => {
+    deleteTaskMutation.mutate(taskId);
+  };
+
+  const openTaskDetail = (taskId: string) => {
+    setSelectedTaskId(taskId);
+  };
+
+  const closeTaskDetail = () => {
+    setSelectedTaskId(null);
+  };
+
+  const onSaveDescription = (event: FormEvent) => {
     event.preventDefault();
+    updateTaskMutation.mutate({ description: descriptionDraft.trim() });
+  };
 
-    if (!selectedTask) {
-      return;
-    }
+  const onSaveProgress = (event: FormEvent) => {
+    event.preventDefault();
+    updateTaskMutation.mutate({ progress: progressDraft });
+  };
 
-    const content = newComment.trim();
-    if (!content) {
-      setError("Comment content is required.");
-      return;
-    }
-
-    createCommentMutation.mutate({ taskId: selectedTask.id, content });
+  const onSavePriority = (event: FormEvent) => {
+    event.preventDefault();
+    updateTaskMutation.mutate({ priority: priorityDraft });
   };
 
   const onCreateChecklistItem = (event: FormEvent) => {
@@ -587,43 +602,20 @@ export function BoardPage() {
     createChecklistMutation.mutate({ taskId: selectedTask.id, title });
   };
 
-  const onSaveDescription = (event: FormEvent) => {
+  const onCreateComment = (event: FormEvent) => {
     event.preventDefault();
 
     if (!selectedTask) {
       return;
     }
 
-    updateTaskMutation.mutate({
-      taskId: selectedTask.id,
-      description: descriptionDraft.trim(),
-    });
-  };
-
-  const onSaveProgress = (event: FormEvent) => {
-    event.preventDefault();
-
-    if (!selectedTask) {
+    const content = newComment.trim();
+    if (!content) {
+      setError("Comment content is required.");
       return;
     }
 
-    updateTaskMutation.mutate({
-      taskId: selectedTask.id,
-      progress: progressDraft,
-    });
-  };
-
-  const onSavePriority = (event: FormEvent) => {
-    event.preventDefault();
-
-    if (!selectedTask) {
-      return;
-    }
-
-    updateTaskMutation.mutate({
-      taskId: selectedTask.id,
-      priority: priorityDraft,
-    });
+    createCommentMutation.mutate({ taskId: selectedTask.id, content });
   };
 
   const onPickAttachment = (file?: File | null) => {
@@ -649,12 +641,7 @@ export function BoardPage() {
   };
 
   const onUploadAttachment = async () => {
-    if (!selectedTask) {
-      setAttachmentError("Select a task first.");
-      return;
-    }
-
-    if (!attachmentFile) {
+    if (!selectedTask || !attachmentFile) {
       setAttachmentError("Choose a file to upload.");
       return;
     }
@@ -692,10 +679,6 @@ export function BoardPage() {
     } finally {
       setAttachmentUploading(false);
     }
-  };
-
-  const onDeleteTask = (taskId: string) => {
-    deleteTaskMutation.mutate(taskId);
   };
 
   return (
@@ -763,214 +746,228 @@ export function BoardPage() {
                   onDraftTitleChange={(value) => setTaskDraftByList((prev) => ({ ...prev, [list.id]: value }))}
                   onCreateTask={onCreateTask(list.id)}
                   selectedTaskId={selectedTaskId}
-                  onSelectTask={setSelectedTaskId}
+                  onSelectTask={openTaskDetail}
                   onDeleteTask={onDeleteTask}
                 />
               ))}
             </div>
           </DndContext>
+        </section>
+      ) : null}
 
-          {selectedTask ? (
-            <section className="page-card task-detail-panel">
-              <header className="task-detail-header">
-                <h3>Task Detail</h3>
-                <p className="muted-text">{selectedTask.title}</p>
-              </header>
+      {selectedTask ? (
+        <div className="task-modal-backdrop" role="presentation" onMouseDown={closeTaskDetail}>
+          <section
+            className="task-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="task-modal-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="task-modal-header">
+              <div>
+                <h2 id="task-modal-title">{selectedTask.title}</h2>
+                <p className="muted-text">
+                  Created {formatDate(selectedTask.createdAt)} by {selectedTask.creator?.username ?? "Unknown"}
+                </p>
+              </div>
+              <button type="button" className="task-modal-close" onClick={closeTaskDetail} aria-label="Close task detail">
+                x
+              </button>
+            </header>
 
-              <section className="task-detail-section">
-                <h4>Thong tin</h4>
-                <p className="muted-text">Ngay tao: {formatDate(selectedTask.createdAt)}</p>
-                <p className="muted-text">Nguoi tao: {selectedTask.creator?.username ?? "Chua co du lieu tu API"}</p>
-                <form className="task-progress-form" onSubmit={onSaveProgress}>
-                  <div className="task-progress-summary">
-                    <span>{progressDraft}%</span>
-                  </div>
-                  <div className="task-progress-bar" aria-label={`Progress ${progressDraft}%`}>
-                    <span style={{ width: `${progressDraft}%` }} />
-                  </div>
-                  <label>
-                    Progress
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={progressDraft}
-                      onChange={(event) => setProgressDraft(Number(event.target.value))}
-                    />
-                  </label>
-                  <div className="task-progress-controls">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={progressDraft}
-                      onChange={(event) => {
-                        const nextValue = Math.max(0, Math.min(100, Number(event.target.value)));
-                        setProgressDraft(Number.isNaN(nextValue) ? 0 : nextValue);
-                      }}
+            <div className="task-modal-body">
+              <main className="task-modal-main">
+                <section className="task-detail-section">
+                  <h3>Description</h3>
+                  <form className="task-detail-form" onSubmit={onSaveDescription}>
+                    <textarea
+                      value={descriptionDraft}
+                      onChange={(event) => setDescriptionDraft(event.target.value)}
+                      placeholder="Nhap mo ta task"
+                      rows={5}
                     />
                     <button type="submit" disabled={updateTaskMutation.isPending}>
-                      {updateTaskMutation.isPending ? "Saving..." : "Save progress"}
+                      {updateTaskMutation.isPending ? "Saving..." : "Save description"}
                     </button>
+                  </form>
+                </section>
+
+                <section className="task-detail-section">
+                  <div className="task-section-heading">
+                    <h3>Checklist</h3>
+                    <span>
+                      {checklistSummary.completed}/{checklistSummary.total}
+                    </span>
                   </div>
-                </form>
-                <form className="task-priority-form" onSubmit={onSavePriority}>
-                  <label>
-                    Priority
-                    <select
-                      value={priorityDraft}
-                      onChange={(event) => setPriorityDraft(event.target.value as Task["priority"])}
-                    >
-                      <option value="Low">Low</option>
-                      <option value="Medium">Medium</option>
-                      <option value="High">High</option>
-                      <option value="Done">Done</option>
-                    </select>
-                  </label>
-                  <span className={getPriorityClass(priorityDraft)}>{priorityDraft}</span>
-                  <button type="submit" disabled={updateTaskMutation.isPending}>
-                    {updateTaskMutation.isPending ? "Saving..." : "Save priority"}
-                  </button>
-                </form>
-                <form className="task-detail-form" onSubmit={onSaveDescription}>
-                  <textarea
-                    value={descriptionDraft}
-                    onChange={(event) => setDescriptionDraft(event.target.value)}
-                    placeholder="Nhap mo ta task"
-                    rows={4}
-                  />
-                  <button type="submit" disabled={updateTaskMutation.isPending}>
-                    {updateTaskMutation.isPending ? "Saving..." : "Save description"}
-                  </button>
-                </form>
-              </section>
+                  <div className="task-checklist-progress" aria-label={`Checklist progress ${checklistSummary.percent}%`}>
+                    <span style={{ width: `${checklistSummary.percent}%` }} />
+                  </div>
+                  <form className="task-detail-inline" onSubmit={onCreateChecklistItem}>
+                    <input
+                      value={newChecklistTitle}
+                      onChange={(event) => setNewChecklistTitle(event.target.value)}
+                      placeholder="Add checklist item"
+                      maxLength={160}
+                    />
+                    <button type="submit" disabled={createChecklistMutation.isPending}>
+                      {createChecklistMutation.isPending ? "Adding..." : "Add"}
+                    </button>
+                  </form>
 
-              <section className="task-detail-section">
-                <div className="task-section-heading">
-                  <h4>Checklist</h4>
-                  <span>
-                    {checklistSummary.completed}/{checklistSummary.total}
-                  </span>
-                </div>
-                <div className="task-checklist-progress" aria-label={`Checklist progress ${checklistSummary.percent}%`}>
-                  <span style={{ width: `${checklistSummary.percent}%` }} />
-                </div>
-                <form className="task-detail-inline" onSubmit={onCreateChecklistItem}>
-                  <input
-                    value={newChecklistTitle}
-                    onChange={(event) => setNewChecklistTitle(event.target.value)}
-                    placeholder="Add checklist item"
-                    maxLength={160}
-                  />
-                  <button type="submit" disabled={createChecklistMutation.isPending}>
-                    {createChecklistMutation.isPending ? "Adding..." : "Add"}
-                  </button>
-                </form>
-
-                {checklistQuery.isLoading ? <p className="muted-text">Loading checklist...</p> : null}
-                {checklistQuery.isError ? <p className="error-text">Could not load checklist.</p> : null}
-                {!checklistQuery.isLoading && !checklistQuery.isError && (checklistQuery.data ?? []).length === 0 ? (
-                  <p className="muted-text">No checklist items yet.</p>
-                ) : null}
-                <div className="task-detail-list">
-                  {sortByPosition(checklistQuery.data ?? []).map((item) => (
-                    <article key={item.id} className={item.isCompleted ? "task-detail-list-item completed" : "task-detail-list-item"}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={item.isCompleted}
-                          onChange={(event) =>
-                            toggleChecklistMutation.mutate({
-                              itemId: item.id,
-                              taskId: item.taskId,
-                              isCompleted: event.target.checked,
-                            })
-                          }
-                          disabled={toggleChecklistMutation.isPending}
-                        />
-                        <span>{item.title}</span>
-                      </label>
-                      <button
-                        type="button"
-                        className="danger-button"
-                        onClick={() => deleteChecklistMutation.mutate({ itemId: item.id, taskId: item.taskId })}
-                        disabled={deleteChecklistMutation.isPending}
-                      >
-                        Delete
-                      </button>
-                    </article>
-                  ))}
-                </div>
-              </section>
-
-              <section className="task-detail-section">
-                <h4>Comments</h4>
-                <form className="task-detail-inline" onSubmit={onCreateComment}>
-                  <input value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Write a comment" />
-                  <button type="submit" disabled={createCommentMutation.isPending}>
-                    {createCommentMutation.isPending ? "Posting..." : "Post"}
-                  </button>
-                </form>
-
-                <div className="task-detail-list">
-                  {(commentsQuery.data ?? []).map((comment) => (
-                    <article key={comment.id} className="task-comment-item">
-                      <p>{comment.content}</p>
-                      <small className="muted-text">
-                        {comment.sender?.username ?? "Unknown"} • {new Date(comment.createdAt).toLocaleString()}
-                      </small>
-                      {comment.senderId === user?.id ? (
+                  {checklistQuery.isLoading ? <p className="muted-text">Loading checklist...</p> : null}
+                  {checklistQuery.isError ? <p className="error-text">Could not load checklist.</p> : null}
+                  {!checklistQuery.isLoading && !checklistQuery.isError && (checklistQuery.data ?? []).length === 0 ? (
+                    <p className="muted-text">No checklist items yet.</p>
+                  ) : null}
+                  <div className="task-detail-list">
+                    {sortByPosition(checklistQuery.data ?? []).map((item) => (
+                      <article key={item.id} className={item.isCompleted ? "task-detail-list-item completed" : "task-detail-list-item"}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={item.isCompleted}
+                            onChange={(event) =>
+                              toggleChecklistMutation.mutate({
+                                itemId: item.id,
+                                taskId: item.taskId,
+                                isCompleted: event.target.checked,
+                              })
+                            }
+                            disabled={toggleChecklistMutation.isPending}
+                          />
+                          <span>{item.title}</span>
+                        </label>
                         <button
                           type="button"
                           className="danger-button"
-                          onClick={() => deleteCommentMutation.mutate(comment.id)}
+                          onClick={() => deleteChecklistMutation.mutate({ itemId: item.id, taskId: item.taskId })}
+                          disabled={deleteChecklistMutation.isPending}
                         >
                           Delete
                         </button>
-                      ) : null}
-                    </article>
-                  ))}
-                </div>
-              </section>
+                      </article>
+                    ))}
+                  </div>
+                </section>
 
-              <section className="task-detail-section">
-                <h4>Attachments</h4>
-                {attachmentError ? <p className="error-text page-feedback">{attachmentError}</p> : null}
-                <div className="task-attachment-actions">
-                  <input
-                    type="file"
-                    className="task-attachment-input"
-                    accept=".pdf,.docx,.xlsx,image/png,image/jpeg"
-                    onChange={(event) => onPickAttachment(event.target.files?.[0])}
-                  />
-                  <button type="button" onClick={onUploadAttachment} disabled={attachmentUploading || !attachmentFile}>
-                    {attachmentUploading ? "Uploading..." : "Upload file"}
-                  </button>
-                </div>
-                {attachmentsQuery.isLoading ? <p className="muted-text">Loading attachments...</p> : null}
-                {attachmentsQuery.isError ? <p className="error-text">Could not load attachments.</p> : null}
-                {!attachmentsQuery.isLoading && !attachmentsQuery.isError && (attachmentsQuery.data ?? []).length === 0 ? (
-                  <p className="muted-text">No attachments yet.</p>
-                ) : null}
-                <div className="attachment-list">
-                  {(attachmentsQuery.data ?? []).map((attachment: Attachment) => (
-                    <article key={attachment.id} className="attachment-item">
-                      <a className="attachment-link" href={attachment.url} target="_blank" rel="noreferrer">
-                        {attachment.fileName}
-                      </a>
-                      <small className="muted-text">{formatFileSize(attachment.size)}</small>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            </section>
-          ) : (
-            <section className="page-card task-detail-panel task-detail-empty">
-              <p className="muted-text">Select a task card to open detail panel.</p>
-            </section>
-          )}
-        </section>
+                <section className="task-detail-section">
+                  <h3>Comments</h3>
+                  <form className="task-detail-inline" onSubmit={onCreateComment}>
+                    <input value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Write a comment" />
+                    <button type="submit" disabled={createCommentMutation.isPending}>
+                      {createCommentMutation.isPending ? "Posting..." : "Post"}
+                    </button>
+                  </form>
+
+                  <div className="task-detail-list">
+                    {(commentsQuery.data ?? []).map((comment) => (
+                      <article key={comment.id} className="task-comment-item">
+                        <p>{comment.content}</p>
+                        <small className="muted-text">
+                          {comment.sender?.username ?? "Unknown"} • {new Date(comment.createdAt).toLocaleString()}
+                        </small>
+                        {comment.senderId === user?.id ? (
+                          <button type="button" className="danger-button" onClick={() => deleteCommentMutation.mutate(comment.id)}>
+                            Delete
+                          </button>
+                        ) : null}
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              </main>
+
+              <aside className="task-modal-side">
+                <section className="task-detail-section">
+                  <h3>Actions</h3>
+                  <form className="task-progress-form" onSubmit={onSaveProgress}>
+                    <div className="task-progress-summary">
+                      <span>{progressDraft}%</span>
+                    </div>
+                    <div className="task-progress-bar" aria-label={`Progress ${progressDraft}%`}>
+                      <span style={{ width: `${progressDraft}%` }} />
+                    </div>
+                    <label>
+                      Progress
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={progressDraft}
+                        onChange={(event) => setProgressDraft(Number(event.target.value))}
+                      />
+                    </label>
+                    <div className="task-progress-controls">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={progressDraft}
+                        onChange={(event) => {
+                          const nextValue = Math.max(0, Math.min(100, Number(event.target.value)));
+                          setProgressDraft(Number.isNaN(nextValue) ? 0 : nextValue);
+                        }}
+                      />
+                      <button type="submit" disabled={updateTaskMutation.isPending}>
+                        Save
+                      </button>
+                    </div>
+                  </form>
+                  <form className="task-priority-form compact" onSubmit={onSavePriority}>
+                    <label>
+                      Priority
+                      <select value={priorityDraft} onChange={(event) => setPriorityDraft(event.target.value as Task["priority"])}>
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Done">Done</option>
+                      </select>
+                    </label>
+                    <span className={getPriorityClass(priorityDraft)}>{priorityDraft}</span>
+                    <button type="submit" disabled={updateTaskMutation.isPending}>
+                      Save
+                    </button>
+                  </form>
+                  <p className="muted-text">Assignee: {selectedTask.assignee?.username ?? "Chua co"}</p>
+                  <p className="muted-text">Due date: {formatDate(selectedTask.dueDate)}</p>
+                </section>
+
+                <section className="task-detail-section">
+                  <h3>Attachments</h3>
+                  {attachmentError ? <p className="error-text page-feedback">{attachmentError}</p> : null}
+                  <div className="task-attachment-actions">
+                    <input
+                      type="file"
+                      className="task-attachment-input"
+                      accept=".pdf,.docx,.xlsx,image/png,image/jpeg"
+                      onChange={(event) => onPickAttachment(event.target.files?.[0])}
+                    />
+                    <button type="button" onClick={onUploadAttachment} disabled={attachmentUploading || !attachmentFile}>
+                      {attachmentUploading ? "Uploading..." : "Upload file"}
+                    </button>
+                  </div>
+                  {attachmentsQuery.isLoading ? <p className="muted-text">Loading attachments...</p> : null}
+                  {attachmentsQuery.isError ? <p className="error-text">Could not load attachments.</p> : null}
+                  {!attachmentsQuery.isLoading && !attachmentsQuery.isError && (attachmentsQuery.data ?? []).length === 0 ? (
+                    <p className="muted-text">No attachments yet.</p>
+                  ) : null}
+                  <div className="attachment-list">
+                    {(attachmentsQuery.data ?? []).map((attachment: Attachment) => (
+                      <article key={attachment.id} className="attachment-item">
+                        <a className="attachment-link" href={attachment.url} target="_blank" rel="noreferrer">
+                          {attachment.fileName}
+                        </a>
+                        <small className="muted-text">{formatFileSize(attachment.size)}</small>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </section>
+        </div>
       ) : null}
 
       {activeTaskId ? <p className="muted-text">Moving task...</p> : null}
