@@ -86,7 +86,16 @@ exports.login = async (req, res) => {
             process.env.JWT_SECRET || "SECRET_KEY",
             {expiresIn: '1h'}
         );
-        res.json({token});
+        res.json({
+            token,
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                role: user.role,
+                createdAt: user.createdAt
+            }
+        });
     }
         catch (error) {
             if (isDatabaseUnavailable(error)) {
@@ -268,4 +277,3 @@ exports.resetPassword = async (req, res) => {
         res.status(500).json({error: 'Password reset failed'});
     }
 };
-

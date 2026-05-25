@@ -18,7 +18,6 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export function LoginPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const setToken = authStore((state) => state.setToken);
   const setSession = authStore((state) => state.setSession);
   const clearSession = authStore((state) => state.clearSession);
   const [error, setError] = useState<string | null>(null);
@@ -40,9 +39,7 @@ export function LoginPage() {
     try {
       queryClient.clear();
       const loginResponse = await authApi.login(values);
-      setToken(loginResponse.token);
-      const profile = await authApi.profile();
-      setSession({ token: loginResponse.token, user: profile });
+      setSession({ token: loginResponse.token, user: loginResponse.user });
       navigate("/dashboard", { replace: true });
     } catch (error) {
       clearSession();

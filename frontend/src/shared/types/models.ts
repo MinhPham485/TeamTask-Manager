@@ -134,4 +134,5 @@ export type DirectThread = {
 
 export type LoginResponse = {
   token: string;
+  user: User;
 };
