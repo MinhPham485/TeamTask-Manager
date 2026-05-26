@@ -9,6 +9,8 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { GroupDetailPage } from "@/pages/GroupDetailPage";
 import { BoardPage } from "@/pages/BoardPage";
 import { ChatPage } from "@/pages/ChatPage";
+import { ProfilePage } from "@/pages/ProfilePage";
+import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
 
 export function AppRouter() {
   return (
@@ -66,6 +68,22 @@ export function AppRouter() {
           element={
             <AppShell>
               <ChatPage />
+            </AppShell>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <AppShell>
+              <ProfilePage />
+            </AppShell>
+          }
+        />
+        <Route
+          path="/profile/password"
+          element={
+            <AppShell>
+              <ChangePasswordPage />
             </AppShell>
           }
         />

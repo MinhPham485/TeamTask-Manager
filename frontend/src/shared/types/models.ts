@@ -6,8 +6,12 @@ export type User = {
   id: string;
   username: string;
   email: string;
-  role?: "USER" | "ADMIN";
+  role?: "User" | "Admin";
   createdAt?: string;
+  phone?: string | null;
+  hometown?: string | null;
+  bio?: string | null;
+  avatarUrl?: string | null;
 };
 
 export type Group = {

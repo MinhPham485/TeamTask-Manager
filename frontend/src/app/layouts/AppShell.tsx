@@ -50,6 +50,8 @@ export function AppShell({ children }: PropsWithChildren) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const clearSession = authStore((state) => state.clearSession);
+  const user = authStore((state) => state.user);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -63,6 +65,7 @@ export function AppShell({ children }: PropsWithChildren) {
   }, [isSidebarCollapsed]);
 
   const handleLogout = () => {
+    setIsUserMenuOpen(false);
     disconnectSocketClient();
     queryClient.clear();
     clearSession();
@@ -108,9 +111,35 @@ export function AppShell({ children }: PropsWithChildren) {
         <header className="topbar">
           <h1>TeamTask Manager</h1>
           <div className="topbar-actions">
-            <button className="logout-button" onClick={handleLogout}>
-              Logout
-            </button>
+            <div className="user-menu">
+              <button
+                type="button"
+                className="user-menu-trigger"
+                onClick={() => setIsUserMenuOpen((current) => !current)}
+                aria-label="Open user menu"
+                aria-expanded={isUserMenuOpen}
+                title={user?.username ?? "Account"}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+                  <path d="M4.5 20c.7-4 3.15-6 7.5-6s6.8 2 7.5 6" />
+                </svg>
+              </button>
+
+              {isUserMenuOpen ? (
+                <div className="user-menu-panel">
+                  <Link className="user-menu-item" to="/profile" onClick={() => setIsUserMenuOpen(false)}>
+                    Profile
+                  </Link>
+                  <Link className="user-menu-item" to="/profile/password" onClick={() => setIsUserMenuOpen(false)}>
+                    Change Password
+                  </Link>
+                  <button type="button" className="user-menu-item" onClick={handleLogout}>
+                    Logout
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
         <main className="content">{children}</main>

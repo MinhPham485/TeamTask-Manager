@@ -22,6 +22,11 @@ export type ResetPasswordPayload = {
   newPassword: string;
 };
 
+export type ChangePasswordPayload = {
+  currentPassword: string;
+  newPassword: string;
+};
+
 export const authApi = {
   register: async (payload: RegisterPayload) => {
     const response = await http.post<User>("/auth/register", payload);
@@ -41,6 +46,10 @@ export const authApi = {
   },
   resetPassword: async (payload: ResetPasswordPayload) => {
     const response = await http.post<{ message: string }>("/auth/reset-password", payload);
+    return response.data;
+  },
+  changePassword: async (payload: ChangePasswordPayload) => {
+    const response = await http.patch<{ message: string }>("/auth/profile/password", payload);
     return response.data;
   },
 };
