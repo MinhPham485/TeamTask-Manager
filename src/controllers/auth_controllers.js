@@ -136,6 +136,10 @@ exports.getProfile = async (req, res) => {
                 email: true,
                 role: true,
                 createdAt: true,
+                phone: true,
+                hometown: true,
+                bio: true,
+                avatarUrl: true
             }
         });
         if (!user) return res.status(404).json({error: 'User not found'});
@@ -277,3 +281,71 @@ exports.resetPassword = async (req, res) => {
         res.status(500).json({error: 'Password reset failed'});
     }
 };
+exports.updateProfile = async (req, res) => {
+    try {
+        const phone = typeof req.body.phone === 'string' ? req.body.phone.trim() : null;
+        const hometown = typeof req.body.hometown === 'string' ? req.body.hometown.trim() : null;
+        const bio = typeof req.body.bio === 'string' ? req.body.bio.trim() : null;
+        const avatarUrl = typeof req.body.avatarUrl === 'string' ? req.body.avatarUrl.trim() : null;
+
+        const user = await prisma.user.update({
+            where: {id: req.user.userId},
+            data:{
+                phone,
+                hometown,
+                bio,
+                avatarUrl
+                },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                role: true,
+                createdAt: true,
+                phone: true,
+                hometown: true,
+                bio: true,
+                avatarUrl: true
+            },
+
+        });
+        res.json(user);
+    }
+    catch (error) {
+        res.status(500).json({error: 'Failed to update profile'});
+    }
+}
+
+exports.changePassword = async (req, res) => {
+    try {
+        const currentPassword = typeof req.body.currentPassword === 'string' ? req.body.currentPassword : '';
+        const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : '';
+        
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({error: 'currentPassword and newPassword are required'});
+        }
+        
+        if (newPassword.length < 6) {
+            return res.status(400).json({error: 'New password must be at least 6 characters'});
+        }
+        const user = await prisma.user.findUnique({where: {id: req.user.userId}});
+
+        if (!user) 
+            return res.status(404).json({error: 'User not found'});
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) 
+            return res.status(400).json({error: 'Current password is incorrect'});
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await prisma.user.update({
+            where: {id: user.id},
+            data: {password: hashedPassword},
+        });
+        
+        res.json({message: 'Password changed successfully'});
+    }
+    catch (error) {
+        res.status(500).json({error: 'Failed to change password'});
+    }
+}

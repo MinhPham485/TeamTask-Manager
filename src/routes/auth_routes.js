@@ -11,4 +11,7 @@ router.post('/reset-password', authController.resetPassword);
 router.get("/admin/users", verifyToken, isAdmin, authController.getAllUsers);
 router.get("/profile", verifyToken, authController.getProfile);
 
+router.patch("/profile", verifyToken, authController.updateProfile);
+router.patch("/profile/password", verifyToken, authController.changePassword);
+
 module.exports = router;
