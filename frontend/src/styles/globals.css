@@ -454,13 +454,20 @@ a {
   font-weight: 700;
 }
 
-.profile-form input {
+.profile-form input,
+.profile-form textarea {
   height: 42px;
   border-radius: 10px;
   border: 1px solid var(--line);
   color: var(--text);
   padding: 0 0.75rem;
   font: inherit;
+}
+
+.profile-form textarea {
+  min-height: 104px;
+  padding-block: 0.65rem;
+  resize: vertical;
 }
 
 .profile-form button {

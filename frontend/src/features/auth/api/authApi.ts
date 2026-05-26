@@ -27,6 +27,12 @@ export type ChangePasswordPayload = {
   newPassword: string;
 };
 
+export type UpdateProfilePayload = {
+  phone?: string;
+  hometown?: string;
+  bio?: string;
+};
+
 export const authApi = {
   register: async (payload: RegisterPayload) => {
     const response = await http.post<User>("/auth/register", payload);
@@ -38,6 +44,10 @@ export const authApi = {
   },
   profile: async () => {
     const response = await http.get<User>("/auth/profile");
+    return response.data;
+  },
+  updateProfile: async (payload: UpdateProfilePayload) => {
+    const response = await http.patch<User>("/auth/profile", payload);
     return response.data;
   },
   forgotPassword: async (payload: ForgotPasswordPayload) => {
