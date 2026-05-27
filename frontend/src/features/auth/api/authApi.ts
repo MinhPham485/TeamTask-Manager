@@ -33,6 +33,23 @@ export type UpdateProfilePayload = {
   bio?: string;
 };
 
+export type CreateAvatarUploadUrlPayload = {
+  fileName: string;
+  mimeType: string;
+  size: number;
+};
+
+export type AvatarUploadUrlResponse = {
+  uploadUrl: string;
+  fileUrl: string;
+  key: string;
+  expiresInSeconds: number;
+};
+
+export type UpdateAvatarPayload = {
+  key: string;
+};
+
 export const authApi = {
   register: async (payload: RegisterPayload) => {
     const response = await http.post<User>("/auth/register", payload);
@@ -48,6 +65,14 @@ export const authApi = {
   },
   updateProfile: async (payload: UpdateProfilePayload) => {
     const response = await http.patch<User>("/auth/profile", payload);
+    return response.data;
+  },
+  createAvatarUploadUrl: async (payload: CreateAvatarUploadUrlPayload) => {
+    const response = await http.post<AvatarUploadUrlResponse>("/auth/profile/avatar/upload-url", payload);
+    return response.data;
+  },
+  updateAvatar: async (payload: UpdateAvatarPayload) => {
+    const response = await http.patch<User>("/auth/profile/avatar", payload);
     return response.data;
   },
   forgotPassword: async (payload: ForgotPasswordPayload) => {
