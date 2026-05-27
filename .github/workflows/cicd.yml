@@ -188,11 +188,11 @@ jobs:
             set_env GCS_PROJECT_ID "taskupload-496308"
             set_env GCS_BUCKET "teamtaskmanager-demo-bucket"
             set_env GCS_CLIENT_EMAIL "upload-service@taskupload-496308.iam.gserviceaccount.com"
-            gcs_private_key_base64=$(cat <<'GCS_PRIVATE_KEY_EOF' | base64 | tr -d '\n'
-            ${{ secrets.GCS_PRIVATE_KEY }}
-            GCS_PRIVATE_KEY_EOF
-            )
-            set_env GCS_PRIVATE_KEY_BASE64 "$gcs_private_key_base64"
+            if [ -z "${{ secrets.GCS_PRIVATE_KEY_BASE64 }}" ]; then
+              echo "ERROR: GitHub secret GCS_PRIVATE_KEY_BASE64 is required"
+              exit 1
+            fi
+            set_env GCS_PRIVATE_KEY_BASE64 "${{ secrets.GCS_PRIVATE_KEY_BASE64 }}"
             set_env GCS_PUBLIC_BASE_URL "https://storage.googleapis.com/teamtaskmanager-demo-bucket"
 
             # Use images built by GitHub Actions so the VM only pulls and restarts containers.
