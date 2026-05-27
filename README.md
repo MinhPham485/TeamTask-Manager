@@ -103,8 +103,13 @@ Production runs on a GCP Compute Engine VM.
 Start production services:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.docker -f docker-compose.prod.yml pull backend frontend
+docker compose --env-file .env.docker -f docker-compose.prod.yml up -d
 ```
+
+Production backend and frontend containers use prebuilt images from GitHub
+Container Registry. Set `BACKEND_IMAGE` and `FRONTEND_IMAGE` in `.env.docker`,
+or let the GitHub Actions deployment workflow write them automatically.
 
 Production services:
 
@@ -182,13 +187,16 @@ Pipeline steps:
 - Apply Prisma migrations
 - Run backend tests
 - Install and build frontend
+- Build and push backend/frontend Docker images to GitHub Container Registry
 - Deploy to the GCP server via SSH on push to `main`
+- Pull prebuilt images on the server and restart services without building on the VM
 
 Main production deploy commands:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml exec -T backend npm run migrate:deploy
+docker compose --env-file .env.docker -f docker-compose.prod.yml pull backend frontend
+docker compose --env-file .env.docker -f docker-compose.prod.yml up -d
+docker compose --env-file .env.docker -f docker-compose.prod.yml exec -T backend npm run migrate:deploy
 ```
 
 Required GitHub Actions secrets:
@@ -200,6 +208,8 @@ DEPLOY_SSH_KEY
 DEPLOY_PATH
 SMTP_USER
 SMTP_PASS
+GHCR_USERNAME
+GHCR_TOKEN
 ```
 
 ---
@@ -237,13 +247,13 @@ docker ps
 View production logs:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs --no-color
+docker compose --env-file .env.docker -f docker-compose.prod.yml logs --no-color
 ```
 
 Run database migrations:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec -T backend npm run migrate:deploy
+docker compose --env-file .env.docker -f docker-compose.prod.yml exec -T backend npm run migrate:deploy
 ```
 
 Restart Nginx:
