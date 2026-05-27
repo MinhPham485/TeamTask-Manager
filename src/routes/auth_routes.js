@@ -14,4 +14,8 @@ router.get("/profile", verifyToken, authController.getProfile);
 router.patch("/profile", verifyToken, authController.updateProfile);
 router.patch("/profile/password", verifyToken, authController.changePassword);
 
+router.post("/profile/avatar/upload-url", verifyToken, authController.createAvatarUploadUrl);
+router.patch("/profile/avatar", verifyToken, authController.updateAvatar);
+
+
 module.exports = router;

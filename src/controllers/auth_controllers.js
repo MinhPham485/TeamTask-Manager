@@ -1,6 +1,9 @@
 const { PrismaClient } = require('@prisma/client');
+const crypto = require('crypto');
+const { createUploadUrl, buildPublicUrl } = require('../services/storage_service');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+
 const {
     generateResetCode,
     getResetConfig,
@@ -8,8 +11,6 @@ const {
     sendPasswordResetEmail,
 } = require('../services/password_reset_service');
 require('dotenv').config();
-
-const prisma = new PrismaClient();
 
 const isDatabaseUnavailable = (error) => {
     const message = typeof error?.message === 'string' ? error.message : '';
@@ -23,6 +24,39 @@ const normalizeAuthPayload = (payload = {}) => {
 
     return { username, email, password };
 };
+
+const prisma = new PrismaClient();
+const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
+
+const ALLOWED_AVATAR_MIME_TYPES = new Set([
+    'image/png',
+    'image/jpeg',
+    'image/webp',
+]);
+const normalizeFileName = (value) => {
+    if (typeof value !== 'string') {
+        return 'avatar';
+    }
+
+    const safeName = value
+        .trim()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-zA-Z0-9._-]/g, '');
+
+    return safeName || 'avatar';
+};
+const profileSelect = {
+    id: true,
+    username: true,
+    email: true,
+    role: true,
+    createdAt: true,
+    phone: true,
+    hometown: true,
+    bio: true,
+    avatarUrl: true,
+};
+
 
 exports.register = async (req, res) => {
     try {
@@ -130,17 +164,7 @@ exports.getProfile = async (req, res) => {
     try {
         const user = await prisma.user.findUnique({
             where: { id: req.user.userId },
-            select: {
-                id: true,
-                username: true,
-                email: true,
-                role: true,
-                createdAt: true,
-                phone: true,
-                hometown: true,
-                bio: true,
-                avatarUrl: true
-            }
+            select: profileSelect,
         });
         if (!user) return res.status(404).json({ error: 'User not found' });
         res.json(user);
@@ -296,21 +320,11 @@ exports.updateProfile = async (req, res) => {
         if (typeof req.body.bio === 'string') {
             data.bio = req.body.bio.trim() || null;
         }
+
         const user = await prisma.user.update({
             where: { id: req.user.userId },
             data,
-            select: {
-                id: true,
-                username: true,
-                email: true,
-                role: true,
-                createdAt: true,
-                phone: true,
-                hometown: true,
-                bio: true,
-                avatarUrl: true
-            },
-
+            select: profileSelect,
         });
         res.json(user);
     }
@@ -352,3 +366,69 @@ exports.changePassword = async (req, res) => {
         res.status(500).json({ error: 'Failed to change password' });
     }
 }
+
+exports.createAvatarUploadUrl = async (req, res) => {
+    try {
+        const fileName = typeof req.body.fileName === 'string' ? req.body.fileName.trim() : '';
+        const mimeType = typeof req.body.mimeType === 'string' ? req.body.mimeType.trim() : '';
+        const size = req.body.size;
+
+        if (!fileName) {
+            return res.status(400).json({ error: 'fileName is required' });
+        }
+
+        if (!ALLOWED_AVATAR_MIME_TYPES.has(mimeType)) {
+            return res.status(400).json({ error: 'Avatar must be png, jpg, or webp' });
+        }
+
+        if (!Number.isInteger(size) || size <= 0 || size > MAX_AVATAR_SIZE) {
+            return res.status(400).json({ error: 'Avatar size is invalid or too large' });
+        }
+
+        const safeName = normalizeFileName(fileName);
+        const objectKey = `avatars/${req.user.userId}/${crypto.randomUUID()}-${safeName}`;
+
+        const expiresInSeconds = 300;
+        const { uploadUrl, fileUrl } = await createUploadUrl({
+            objectKey,
+            contentType: mimeType,
+            expiresInSeconds,
+        });
+        res.json({
+            uploadUrl,
+            fileUrl,
+            key: objectKey,
+            expiresInSeconds,
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to create avatar upload URL' });
+    }
+};
+
+exports.updateAvatar = async (req, res) => {
+    try {
+        const key = typeof req.body.key === 'string' ? req.body.key.trim() : '';
+
+        if (!key) {
+            return res.status(400).json({ error: 'avatar key is required' });
+        }
+
+        const expectedPrefix = `avatars/${req.user.userId}/`;
+
+        if (!key.startsWith(expectedPrefix)) {
+            return res.status(400).json({ error: 'Invalid avatar key' });
+        }
+
+        const avatarUrl = buildPublicUrl(key);
+
+        const user = await prisma.user.update({
+            where: { id: req.user.userId },
+            data: { avatarUrl },
+            select: profileSelect,
+        });
+
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to update avatar' });
+    }
+};
