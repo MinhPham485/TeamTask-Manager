@@ -120,10 +120,14 @@ export function AppShell({ children }: PropsWithChildren) {
                 aria-expanded={isUserMenuOpen}
                 title={user?.username ?? "Account"}
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
-                  <path d="M4.5 20c.7-4 3.15-6 7.5-6s6.8 2 7.5 6" />
-                </svg>
+                {user?.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="" />
+                ) : (
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+                    <path d="M4.5 20c.7-4 3.15-6 7.5-6s6.8 2 7.5 6" />
+                  </svg>
+                )}
               </button>
 
               {isUserMenuOpen ? (

@@ -127,7 +127,11 @@ exports.login = async (req, res) => {
                 username: user.username,
                 email: user.email,
                 role: user.role,
-                createdAt: user.createdAt
+                createdAt: user.createdAt,
+                phone: user.phone,
+                hometown: user.hometown,
+                bio: user.bio,
+                avatarUrl: user.avatarUrl
             }
         });
     }

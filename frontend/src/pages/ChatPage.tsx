@@ -39,6 +39,7 @@ type ConversationTarget =
       title: string;
       subtitle: string;
       peerUserId: string;
+      avatarUrl?: string | null;
       thread?: DirectThread | null;
     };
 
@@ -64,6 +65,22 @@ function formatFileSize(size: number) {
 
   const mb = kb / 1024;
   return `${mb.toFixed(2)} MB`;
+}
+
+function Avatar({
+  name,
+  avatarUrl,
+  className = "messenger-avatar",
+}: {
+  name: string;
+  avatarUrl?: string | null;
+  className?: string;
+}) {
+  return (
+    <span className={className}>
+      {avatarUrl ? <img src={avatarUrl} alt="" /> : name.trim().charAt(0).toUpperCase() || "#"}
+    </span>
+  );
 }
 
 export function ChatPage() {
@@ -556,8 +573,18 @@ export function ChatPage() {
     directThreads.forEach((thread) => {
       const peer =
         thread.userAId === currentUser?.id
-          ? { id: thread.userB?.id ?? thread.userBId, username: thread.userB?.username ?? "User", email: thread.userB?.email ?? "" }
-          : { id: thread.userA?.id ?? thread.userAId, username: thread.userA?.username ?? "User", email: thread.userA?.email ?? "" };
+          ? {
+              id: thread.userB?.id ?? thread.userBId,
+              username: thread.userB?.username ?? "User",
+              email: thread.userB?.email ?? "",
+              avatarUrl: thread.userB?.avatarUrl ?? null,
+            }
+          : {
+              id: thread.userA?.id ?? thread.userAId,
+              username: thread.userA?.username ?? "User",
+              email: thread.userA?.email ?? "",
+              avatarUrl: thread.userA?.avatarUrl ?? null,
+            };
 
       if (peer.id && peer.id !== currentUser?.id && !contactsByUserId.has(peer.id)) {
         contactsByUserId.set(peer.id, {
@@ -602,6 +629,7 @@ export function ChatPage() {
         title: member.user?.username ?? "User",
         subtitle: lastMessage ? `${lastSender ?? "User"}: ${lastMessage.content}` : "Direct chat",
         peerUserId: member.userId,
+        avatarUrl: member.user?.avatarUrl ?? null,
         thread,
       };
     });
@@ -674,7 +702,10 @@ export function ChatPage() {
                     }
                   }}
                 >
-                  <span className="messenger-avatar">{getGroupInitial(conversation.title)}</span>
+                  <Avatar
+                    name={conversation.title}
+                    avatarUrl={conversation.type === "direct" ? conversation.avatarUrl : null}
+                  />
                   <span className="messenger-room-copy">
                     <strong>{conversation.title}</strong>
                     <small>{conversation.subtitle}</small>
@@ -690,7 +721,11 @@ export function ChatPage() {
       <section className="page-card messenger-thread">
         <header className="messenger-thread-header">
           <div className="messenger-thread-title">
-            <span className="messenger-avatar large">{getGroupInitial(threadTitle)}</span>
+            <Avatar
+              name={threadTitle}
+              avatarUrl={chatMode === "direct" ? activeDirectContact?.user?.avatarUrl : null}
+              className="messenger-avatar large"
+            />
             <div>
               <h3>{threadTitle}</h3>
               <p>{threadSubtitle}</p>
@@ -712,14 +747,14 @@ export function ChatPage() {
           {chatMode === "direct" && directMessagesQuery.isLoading ? <p className="muted-text">Loading messages...</p> : null}
           {chatMode === "group" && !messagesQuery.isLoading && !messagesQuery.isError && visibleMessages.length === 0 ? (
             <div className="messenger-empty-state">
-              <span className="messenger-avatar large">{getGroupInitial(threadTitle)}</span>
+              <Avatar name={threadTitle} className="messenger-avatar large" />
               <h3>No messages yet</h3>
               <p className="muted-text">Start the conversation with this group.</p>
             </div>
           ) : null}
           {chatMode === "direct" && !directMessagesQuery.isLoading && !directMessagesQuery.isError && visibleMessages.length === 0 ? (
             <div className="messenger-empty-state">
-              <span className="messenger-avatar large">{getGroupInitial(threadTitle)}</span>
+              <Avatar name={threadTitle} avatarUrl={activeDirectContact?.user?.avatarUrl} className="messenger-avatar large" />
               <h3>No messages yet</h3>
               <p className="muted-text">Send the first direct message.</p>
             </div>
@@ -729,11 +764,12 @@ export function ChatPage() {
             const isMine = message.senderId === currentUser?.id;
             const attachments = "attachments" in message ? message.attachments : undefined;
             const senderName = getSenderName(message);
+            const senderAvatarUrl = isMine ? currentUser?.avatarUrl : message.sender?.avatarUrl;
 
             return (
               <article key={message.id} className={isMine ? "messenger-message mine" : "messenger-message"}>
                 <p className={isMine ? "messenger-message-meta mine" : "messenger-message-meta"}>{formatTime(message.createdAt)}</p>
-                {!isMine ? <span className="messenger-message-avatar">{getGroupInitial(senderName)}</span> : null}
+                {!isMine ? <Avatar name={senderName} avatarUrl={senderAvatarUrl} className="messenger-message-avatar" /> : null}
                 <div className={isMine ? "messenger-bubble mine" : "messenger-bubble"}>
                   <header>
                     <strong>{senderName}</strong>

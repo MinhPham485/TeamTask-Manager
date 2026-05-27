@@ -123,7 +123,8 @@ exports.getGroupById = async (req, res) => {
                             select: {
                                 id: true,
                                 username: true,
-                                email: true
+                                email: true,
+                                avatarUrl: true
                             }
                         }
                     }
@@ -148,7 +149,8 @@ exports.getGroupMembers = async (req, res) => {
                     select: {
                         id: true,
                         username: true,
-                        email: true
+                        email: true,
+                        avatarUrl: true
                     }
                 }
             }

@@ -311,6 +311,13 @@ a {
   stroke-linejoin: round;
 }
 
+.user-menu-trigger img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
 .user-menu-panel {
   position: absolute;
   right: 0;
@@ -1497,11 +1504,19 @@ a {
   color: #fff;
   font-weight: 700;
   flex: 0 0 auto;
+  overflow: hidden;
 }
 
 .messenger-avatar.large {
   width: 48px;
   height: 48px;
+}
+
+.messenger-avatar img,
+.messenger-message-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .messenger-room-copy {
@@ -1635,6 +1650,7 @@ a {
   font-size: 0.78rem;
   font-weight: 800;
   grid-row: 2;
+  overflow: hidden;
 }
 
 .messenger-bubble {

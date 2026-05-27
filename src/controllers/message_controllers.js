@@ -60,7 +60,8 @@ exports.getMessagesByGroup = async (req, res) => {
                     select: {
                         id: true,
                         username: true,
-                        email: true
+                        email: true,
+                        avatarUrl: true
                     }
                 }
             }

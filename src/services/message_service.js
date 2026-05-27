@@ -92,14 +92,16 @@ const getOrCreateDirectThread = async ({prisma, userId, peerUserId}) => {
                 select: {
                     id: true,
                     username: true,
-                    email: true
+                    email: true,
+                    avatarUrl: true
                 }
             },
             userB: {
                 select: {
                     id: true,
                     username: true,
-                    email: true
+                    email: true,
+                    avatarUrl: true
                 }
             }
         }
@@ -124,14 +126,16 @@ const listDirectThreads = async ({prisma, userId}) => {
                 select: {
                     id: true,
                     username: true,
-                    email: true
+                    email: true,
+                    avatarUrl: true
                 }
             },
             userB: {
                 select: {
                     id: true,
                     username: true,
-                    email: true
+                    email: true,
+                    avatarUrl: true
                 }
             },
             messages: {
@@ -144,7 +148,8 @@ const listDirectThreads = async ({prisma, userId}) => {
                         select: {
                             id: true,
                             username: true,
-                            email: true
+                            email: true,
+                            avatarUrl: true
                         }
                     }
                 }
@@ -174,7 +179,8 @@ const listDirectMessagesByThread = async ({prisma, userId, threadId}) => {
                 select: {
                     id: true,
                     username: true,
-                    email: true
+                    email: true,
+                    avatarUrl: true
                 }
             }
         }
@@ -233,7 +239,8 @@ const createDirectMessage = async ({prisma, userId, threadId, recipientId, conte
                 select: {
                     id: true,
                     username: true,
-                    email: true
+                    email: true,
+                    avatarUrl: true
                 }
             }
         }
@@ -288,7 +295,8 @@ const createGroupMessage = async ({prisma, userId, groupId, content}) => {
                 select: {
                     id: true,
                     username: true,
-                    email: true
+                    email: true,
+                    avatarUrl: true
                 }
             }
         }
