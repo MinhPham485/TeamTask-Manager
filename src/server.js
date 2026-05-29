@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const {Server} = require('socket.io');
+require('dotenv').config();
 const authRoutes = require('./routes/auth_routes');
 const groupRoutes = require('./routes/group_routes');
 const taskRoutes = require('./routes/task_routes');
@@ -18,8 +19,44 @@ const { metricsMiddleware, metricsHandler } = require('./services/metrics_servic
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const DEFAULT_ALLOWED_ORIGINS = [
+    'https://minhph.xyz',
+    'https://www.minhph.xyz',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174'
+];
+const allowedOrigins = (process.env.CORS_ORIGINS || DEFAULT_ALLOWED_ORIGINS.join(','))
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
-app.use(cors());
+const isAllowedOrigin = (origin) => {
+    if (!origin) {
+        return true;
+    }
+
+    return allowedOrigins.includes(origin);
+};
+
+const corsOptions = {
+    origin(origin, callback) {
+        if (isAllowedOrigin(origin)) {
+            callback(null, true);
+            return;
+        }
+
+        callback(new Error('Not allowed by CORS'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: false
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(metricsMiddleware);
 app.use('/api/auth', authRoutes);
@@ -59,8 +96,16 @@ if (require.main === module) {
     const server = http.createServer(app);
     const io = new Server(server, {
         cors: {
-            origin: '*',
-            methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+            origin(origin, callback) {
+                if (isAllowedOrigin(origin)) {
+                    callback(null, true);
+                    return;
+                }
+
+                callback(new Error('Not allowed by CORS'));
+            },
+            methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+            allowedHeaders: ['Content-Type', 'Authorization']
         }
     });
 
@@ -75,5 +120,4 @@ if (require.main === module) {
 app.get('/metrics', metricsHandler);
 
 module.exports = app;
-
 
