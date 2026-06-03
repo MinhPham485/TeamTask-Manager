@@ -1,4 +1,4 @@
-const {PrismaClient} = require('@prisma/client');
+const { PrismaClient } = require('@prisma/client');
 require('dotenv').config();
 const prisma = new PrismaClient();
 
@@ -80,20 +80,104 @@ const isGroupMember = async (userId, groupId) => {
     return Boolean(membership);
 };
 
+const buildParticipantIds = ({ memberIds, assignedTo, leaderId }) => {
+    if (memberIds !== undefined && !Array.isArray(memberIds)) {
+        return null;
+    }
+
+    const participantIds = new Set();
+
+    if (Array.isArray(memberIds)) {
+        memberIds.forEach((userId) => {
+            if (userId) {
+                participantIds.add(userId);
+            }
+        });
+    }
+
+    if (assignedTo) {
+        participantIds.add(assignedTo);
+    }
+
+    if (leaderId) {
+        participantIds.add(leaderId);
+    }
+
+    return participantIds;
+};
+
+const validateParticipantsInGroup = async (participantIds, groupId) => {
+    if (participantIds.size === 0) {
+        return true;
+    }
+
+    const memberships = await prisma.groupMember.findMany({
+        where: {
+            groupId,
+            userId: {
+                in: [...participantIds]
+            }
+        },
+        select: {
+            userId: true
+        }
+    });
+
+    return memberships.length === participantIds.size;
+};
+
+const getTaskWithMemberships = (taskId) => prisma.task.findUnique({
+    where: { id: taskId },
+    include: {
+        assignee: {
+            select: {
+                id: true,
+                username: true,
+                email: true
+            }
+        },
+        creator: {
+            select: {
+                id: true,
+                username: true,
+                email: true
+            }
+        },
+        taskMemberships: {
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true
+                    }
+                }
+            },
+            orderBy: {
+                createdAt: 'asc'
+            }
+        }
+    }
+});
+
 exports.createTask = async (req, res) => {
     try {
-        const {title, description, groupId, assignedTo, listId, progress, priority} = req.body;
+        const { title, description, groupId, assignedTo, memberIds, leaderId, listId, progress, priority } = req.body;
 
         if (!groupId) {
             return res.status(400).json({ error: 'Group ID is required' });
         }
 
-        if (assignedTo) {
-            const assigneeInGroup = await isGroupMember(assignedTo, groupId);
+        const participantIds = buildParticipantIds({ memberIds, assignedTo, leaderId });
 
-            if (!assigneeInGroup) {
-                return res.status(400).json({ error: 'Assignee must be a member of the group' });
-            }
+        if (participantIds === null) {
+            return res.status(400).json({ error: 'memberIds must be an array' });
+        }
+
+        const participantsInGroup = await validateParticipantsInGroup(participantIds, groupId);
+
+        if (!participantsInGroup) {
+            return res.status(400).json({ error: 'All task members must be members of the group' });
         }
 
         let targetList = null;
@@ -104,9 +188,7 @@ exports.createTask = async (req, res) => {
                     id: listId,
                     groupId
                 },
-                select: {
-                    id: true
-                }
+                select: { id: true }
             });
 
             if (!targetList) {
@@ -119,9 +201,7 @@ exports.createTask = async (req, res) => {
                     { position: 'asc' },
                     { createdAt: 'asc' }
                 ],
-                select: {
-                    id: true
-                }
+                select: { id: true }
             });
 
             if (!targetList) {
@@ -157,34 +237,53 @@ exports.createTask = async (req, res) => {
         const taskProgress = normalizedProgress ?? 0;
         const taskPriority = normalizedPriority ?? 'Low';
 
-        const task = await prisma.task.create({
-            data: {
-                title,
-                description,
-                groupId,
-                listId: targetList.id,
-                position: (lastTask?.position ?? -1) + 1,
-                assignedTo,
-                createdBy: req.user.userId,
-                progress: taskProgress,
-                priority: taskPriority
-            },
-            include: {
-                assignee: {
-                    select: {
-                        id: true,
-                        username: true,
-                        email: true
-                    }
-                },
-                creator: {
-                    select: {
-                        id: true,
-                        username: true,
-                        email: true
+        const task = await prisma.$transaction(async (transaction) => {
+            const createdTask = await transaction.task.create({
+                data: {
+                    title,
+                    description,
+                    groupId,
+                    listId: targetList.id,
+                    position: (lastTask?.position ?? -1) + 1,
+                    assignedTo,
+                    createdBy: req.user.userId,
+                    progress: taskProgress,
+                    priority: taskPriority
+                }
+            });
+
+            if (participantIds.size > 0) {
+                await transaction.taskMember.createMany({
+                    data: [...participantIds].map((userId) => ({
+                        taskId: createdTask.id,
+                        userId,
+                        role: userId === leaderId ? 'leader' : 'member'
+                    })),
+                    skipDuplicates: true
+                });
+            }
+
+            return transaction.task.findUnique({
+                where: { id: createdTask.id },
+                include: {
+                    assignee: {
+                        select: { id: true, username: true, email: true }
+                    },
+                    creator: {
+                        select: { id: true, username: true, email: true }
+                    },
+                    taskMemberships: {
+                        include: {
+                            user: {
+                                select: { id: true, username: true, email: true }
+                            }
+                        },
+                        orderBy: {
+                            createdAt: 'asc'
+                        }
                     }
                 }
-            }
+            });
         });
         res.status(201).json(task);
     } catch (error) {
@@ -194,7 +293,7 @@ exports.createTask = async (req, res) => {
 
 exports.getTasksByGroup = async (req, res) => {
     try {
-        const {groupId} = req.params;
+        const { groupId } = req.params;
         const [tasks, lists] = await Promise.all([
             prisma.task.findMany({
                 where: { groupId },
@@ -221,7 +320,21 @@ exports.getTasksByGroup = async (req, res) => {
                         orderBy: {
                             position: 'asc'
                         }
-                    }
+                    },
+                    taskMemberships: {
+                        include: {
+                            user: {
+                                select: {
+                                    id: true,
+                                    username: true,
+                                    email: true,
+                                },
+                            },
+                        },
+                        orderBy: {
+                            createdAt: 'asc',
+                        },
+                    },
                 }
             }),
             prisma.list.findMany({
@@ -258,13 +371,12 @@ exports.getTasksByGroup = async (req, res) => {
     }
 };
 
-exports.updateTask = async (req, res) => {
+exports.updateTaskMembers = async (req, res) => {
     try {
-        const {id} = req.params;
-        const {title, description, assignedTo, dueDate, progress, priority} = req.body;
-
+        const { id } = req.params;
+        const { memberIds, leaderId } = req.body;
         const currentTask = req.task || await prisma.task.findUnique({
-            where: {id},
+            where: { id },
             select: {
                 id: true,
                 groupId: true
@@ -272,30 +384,92 @@ exports.updateTask = async (req, res) => {
         });
 
         if (!currentTask) {
-            return res.status(404).json({error: 'Task not found'});
+            return res.status(404).json({ error: 'Task not found' });
+        }
+
+        if (!Array.isArray(memberIds)) {
+            return res.status(400).json({ error: 'memberIds must be an array' });
+        }
+
+        const participantIds = buildParticipantIds({ memberIds, leaderId });
+
+        if (participantIds === null) {
+            return res.status(400).json({ error: 'memberIds must be an array' });
+        }
+
+        const participantsInGroup = await validateParticipantsInGroup(participantIds, currentTask.groupId);
+
+        if (!participantsInGroup) {
+            return res.status(400).json({ error: 'All task members must be members of the group' });
+        }
+
+        await prisma.$transaction(async (transaction) => {
+            await transaction.taskMember.deleteMany({
+                where: {
+                    taskId: id
+                }
+            });
+
+            if (participantIds.size > 0) {
+                await transaction.taskMember.createMany({
+                    data: [...participantIds].map((userId) => ({
+                        taskId: id,
+                        userId,
+                        role: userId === leaderId ? 'leader' : 'member'
+                    })),
+                    skipDuplicates: true
+                });
+            }
+        });
+
+        const task = await getTaskWithMemberships(id);
+        res.json(task);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.updateTask = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, description, assignedTo, dueDate, progress, priority } = req.body;
+
+        const currentTask = req.task || await prisma.task.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                groupId: true
+            }
+        });
+
+        if (!currentTask) {
+            return res.status(404).json({ error: 'Task not found' });
         }
 
         if (assignedTo) {
             const assigneeInGroup = await isGroupMember(assignedTo, currentTask.groupId);
 
             if (!assigneeInGroup) {
-                return res.status(400).json({error: 'Assignee must be a member of the group'});
+                return res.status(400).json({ error: 'Assignee must be a member of the group' });
             }
         }
-
         const normalizedProgress = normalizeProgress(progress);
 
         if (normalizedProgress === null) {
-            return res.status(400).json({error: 'Progress must be an integer from 0 to 100'});
+            return res.status(400).json({ error: 'Progress must be an integer from 0 to 100' });
         }
 
         const normalizedPriority = normalizePriority(priority);
 
         if (normalizedPriority === null) {
-            return res.status(400).json({error: 'Priority must be Low, Medium, High, or Done'});
+            return res.status(400).json({ error: 'Priority must be Low, Medium, High, or Done' });
         }
 
-        const data = {title, description, assignedTo, dueDate};
+        const data = { title, description, assignedTo };
+
+        if (dueDate !== undefined) {
+            data.dueDate = dueDate ? new Date(dueDate) : null;
+        }
 
         if (normalizedProgress !== undefined) {
             data.progress = normalizedProgress;
@@ -306,7 +480,7 @@ exports.updateTask = async (req, res) => {
         }
 
         const task = await prisma.task.update({
-            where: {id},
+            where: { id },
             data,
             include: {
                 assignee: {
@@ -328,27 +502,27 @@ exports.updateTask = async (req, res) => {
         res.json(task);
     }
     catch (error) {
-        res.status(500).json({error: error.message});
+        res.status(500).json({ error: error.message });
     }
 };
 
 exports.deleteTask = async (req, res) => {
     try {
-        const {id} = req.params;
-        await prisma.task.delete({where: {id}});
-        res.json({message: 'Task deleted successfully'});
+        const { id } = req.params;
+        await prisma.task.delete({ where: { id } });
+        res.json({ message: 'Task deleted successfully' });
     } catch (error) {
-        res.status(500).json({error: error.message});
+        res.status(500).json({ error: error.message });
     }
 };
 
 exports.moveTaskToList = async (req, res) => {
     try {
-        const {id} = req.params;
-        const {listId} = req.body;
+        const { id } = req.params;
+        const { listId } = req.body;
 
         if (!listId) {
-            return res.status(400).json({error: 'List ID is required'});
+            return res.status(400).json({ error: 'List ID is required' });
         }
 
         const currentTask = req.task || await prisma.task.findUnique({
@@ -356,7 +530,7 @@ exports.moveTaskToList = async (req, res) => {
         });
 
         if (!currentTask) {
-            return res.status(404).json({error: 'Task not found'});
+            return res.status(404).json({ error: 'Task not found' });
         }
 
         const targetList = await prisma.list.findUnique({
@@ -368,7 +542,7 @@ exports.moveTaskToList = async (req, res) => {
         });
 
         if (!targetList || targetList.groupId !== currentTask.groupId) {
-            return res.status(400).json({error: 'List does not belong to task group'});
+            return res.status(400).json({ error: 'List does not belong to task group' });
         }
 
         if (currentTask.listId === listId) {
@@ -428,20 +602,20 @@ exports.moveTaskToList = async (req, res) => {
         res.json(task);
     }
     catch (error) {
-        res.status(500).json({error: error.message});
+        res.status(500).json({ error: error.message });
     }
 };
 
 exports.updateTaskPosition = async (req, res) => {
     try {
-        const {id} = req.params;
-        const {listId, position} = req.body;
+        const { id } = req.params;
+        const { listId, position } = req.body;
         const currentTask = req.task || await prisma.task.findUnique({
             where: { id }
         });
 
         if (!currentTask) {
-            return res.status(404).json({error: 'Task not found'});
+            return res.status(404).json({ error: 'Task not found' });
         }
 
         const nextListId = listId || currentTask.listId;
@@ -454,7 +628,7 @@ exports.updateTaskPosition = async (req, res) => {
         });
 
         if (!targetList || targetList.groupId !== currentTask.groupId) {
-            return res.status(400).json({error: 'List does not belong to task group'});
+            return res.status(400).json({ error: 'List does not belong to task group' });
         }
 
         const targetTasks = await prisma.task.findMany({
@@ -477,7 +651,7 @@ exports.updateTaskPosition = async (req, res) => {
         const nextPosition = clampPosition(position, targetTasks.length);
 
         if (nextPosition === null) {
-            return res.status(400).json({error: 'Position must be an integer'});
+            return res.status(400).json({ error: 'Position must be an integer' });
         }
 
         await prisma.$transaction(async (transaction) => {
@@ -520,30 +694,30 @@ exports.updateTaskPosition = async (req, res) => {
         const task = await getTaskWithAssignee(id);
         res.json(task);
     } catch (error) {
-        res.status(500).json({error: error.message});
+        res.status(500).json({ error: error.message });
     }
 };
 
 exports.reorderTasks = async (req, res) => {
     try {
-        const {groupId, listId, taskIds} = req.body;
+        const { groupId, listId, taskIds } = req.body;
 
         if (!groupId) {
-            return res.status(400).json({error: 'Group ID is required'});
+            return res.status(400).json({ error: 'Group ID is required' });
         }
 
         if (!listId) {
-            return res.status(400).json({error: 'List ID is required'});
+            return res.status(400).json({ error: 'List ID is required' });
         }
 
         if (!Array.isArray(taskIds) || taskIds.length === 0) {
-            return res.status(400).json({error: 'taskIds must be a non-empty array'});
+            return res.status(400).json({ error: 'taskIds must be a non-empty array' });
         }
 
         const uniqueTaskIds = [...new Set(taskIds)];
 
         if (uniqueTaskIds.length !== taskIds.length) {
-            return res.status(400).json({error: 'taskIds must not contain duplicates'});
+            return res.status(400).json({ error: 'taskIds must not contain duplicates' });
         }
 
         const tasks = await prisma.task.findMany({
@@ -560,7 +734,7 @@ exports.reorderTasks = async (req, res) => {
         });
 
         if (tasks.length !== taskIds.length) {
-            return res.status(400).json({error: 'One or more tasks do not belong to the group'});
+            return res.status(400).json({ error: 'One or more tasks do not belong to the group' });
         }
 
         await prisma.$transaction(taskIds.map((taskId, index) => prisma.task.update({
@@ -593,17 +767,17 @@ exports.reorderTasks = async (req, res) => {
 
         res.json(updatedTasks);
     } catch (error) {
-        res.status(500).json({error: error.message});
+        res.status(500).json({ error: error.message });
     }
 };
 
 exports.assignLabels = async (req, res) => {
     try {
-        const {id} = req.params;
-        const {labelIds} = req.body;
+        const { id } = req.params;
+        const { labelIds } = req.body;
 
         if (!Array.isArray(labelIds)) {
-            return res.status(400).json({error: 'labelIds must be an array'});
+            return res.status(400).json({ error: 'labelIds must be an array' });
         }
 
         const currentTask = req.task || await prisma.task.findUnique({
@@ -615,13 +789,13 @@ exports.assignLabels = async (req, res) => {
         });
 
         if (!currentTask) {
-            return res.status(404).json({error: 'Task not found'});
+            return res.status(404).json({ error: 'Task not found' });
         }
 
         const uniqueLabelIds = [...new Set(labelIds)];
 
         if (uniqueLabelIds.length !== labelIds.length) {
-            return res.status(400).json({error: 'labelIds must not contain duplicates'});
+            return res.status(400).json({ error: 'labelIds must not contain duplicates' });
         }
 
         if (uniqueLabelIds.length > 0) {
@@ -638,7 +812,7 @@ exports.assignLabels = async (req, res) => {
             });
 
             if (labels.length !== uniqueLabelIds.length) {
-                return res.status(400).json({error: 'One or more labels do not belong to task group'});
+                return res.status(400).json({ error: 'One or more labels do not belong to task group' });
             }
         }
 
@@ -660,7 +834,7 @@ exports.assignLabels = async (req, res) => {
         });
 
         const updatedTask = await prisma.task.findUnique({
-            where: {id},
+            where: { id },
             include: {
                 assignee: {
                     select: {
@@ -679,6 +853,232 @@ exports.assignLabels = async (req, res) => {
 
         res.json(updatedTask);
     } catch (error) {
-        res.status(500).json({error: error.message});
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// Deadline helpers keep dueDate immutable; overdue status is computed at read time.
+const startOfToday = () => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return now;
+};
+
+const startOfTomorrow = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    return tomorrow;
+};
+
+const endOfNext7Days = () => {
+    const next7Days = new Date();
+    next7Days.setDate(next7Days.getDate() + 7);
+    next7Days.setHours(23, 59, 59, 999);
+    return next7Days;
+};
+
+const isTaskDone = (task) => {
+    return task.priority === 'Done' || task.progress === 100;
+};
+
+const getDaysOverdue = (task) => {
+    if (!task.dueDate || isTaskDone(task)) {
+        return 0;
+    }
+
+    const dueDate = new Date(task.dueDate);
+    const today = startOfToday();
+
+    if (dueDate >= today) {
+        return 0;
+    }
+
+    const dueDay = new Date(dueDate);
+    dueDay.setHours(0, 0, 0, 0);
+
+    return Math.floor((today - dueDay) / (1000 * 60 * 60 * 24));
+};
+
+const getDeadlineBucket = (task) => {
+    if (!task.dueDate) {
+        return 'noDue';
+    }
+
+    const dueDate = new Date(task.dueDate);
+    const today = startOfToday();
+    const tomorrow = startOfTomorrow();
+    const next7DaysEnd = endOfNext7Days();
+
+    if (dueDate < today && !isTaskDone(task)) {
+        return 'overdue';
+    }
+
+    if (dueDate >= today && dueDate < tomorrow) {
+        return 'today';
+    }
+
+    if (dueDate >= tomorrow && dueDate <= next7DaysEnd) {
+        return 'week';
+    }
+
+    return 'later';
+};
+
+const withDeadlineMeta = (task) => {
+    const daysOverdue = getDaysOverdue(task);
+
+    return {
+        ...task,
+        deadlineBucket: getDeadlineBucket(task),
+        isOverdue: daysOverdue > 0,
+        daysOverdue
+    };
+};
+const taskDeadlineInclude = {
+    assignee: {
+        select: {
+            id: true,
+            username: true,
+            email: true
+        }
+    },
+    creator: {
+        select: {
+            id: true,
+            username: true,
+            email: true
+        }
+    },
+    taskMemberships: {
+        include: {
+            user: {
+                select: {
+                    id: true,
+                    username: true,
+                    email: true
+                }
+            }
+        },
+        orderBy: {
+            createdAt: 'asc'
+        }
+    },
+    checklistItems: {
+        orderBy: {
+            position: 'asc'
+        }
+    }
+};
+// checklist summary
+const withChecklistSummary = (task) => {
+    const checklistItems = task.checklistItems ?? [];
+    const completed = checklistItems.filter((item) => item.isCompleted).length;
+    const total = checklistItems.length;
+
+    return {
+        ...task,
+        checklistSummary: {
+            completed,
+            total,
+            percent: total > 0 ? Math.round((completed / total) * 100) : 0
+        }
+    };
+};
+const withDeadlineTaskMeta = (task) => {
+    return withDeadlineMeta(withChecklistSummary(task));
+};
+exports.getDeadlineTasks = async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const {
+            bucket = 'all',
+            scope = 'all',
+            assigneeId,
+            leaderId,
+            priority,
+            search
+        } = req.query;
+
+        const membership = req.groupMembership;
+        const isAdmin = membership && ['owner', 'manager'].includes(membership.role);
+        const andFilters = [];
+
+        if (!isAdmin || scope === 'mine') {
+            andFilters.push({
+                taskMemberships: {
+                    some: {
+                        userId: req.user.userId
+                    }
+                }
+            });
+        }
+
+        if (priority) {
+            andFilters.push({
+                priority
+            });
+        }
+
+        if (search) {
+            andFilters.push({
+                OR: [
+                    {
+                        title: {
+                            contains: search,
+                            mode: 'insensitive'
+                        }
+                    },
+                    {
+                        description: {
+                            contains: search,
+                            mode: 'insensitive'
+                        }
+                    }
+                ]
+            });
+        }
+
+        if (assigneeId) {
+            andFilters.push({
+                taskMemberships: {
+                    some: {
+                        userId: assigneeId
+                    }
+                }
+            });
+        }
+
+        if (leaderId) {
+            andFilters.push({
+                taskMemberships: {
+                    some: {
+                        userId: leaderId,
+                        role: 'leader'
+                    }
+                }
+            });
+        }
+
+        const tasks = await prisma.task.findMany({
+            where: {
+                groupId,
+                ...(andFilters.length > 0 ? { AND: andFilters } : {})
+            },
+            include: taskDeadlineInclude,
+            orderBy: [
+                { dueDate: 'asc' },
+                { createdAt: 'asc' }
+            ]
+        });
+
+        const enrichedTasks = tasks.map(withDeadlineTaskMeta);
+        const filteredTasks = bucket === 'all'
+            ? enrichedTasks
+            : enrichedTasks.filter((task) => task.deadlineBucket === bucket);
+
+        res.json(filteredTasks);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 };

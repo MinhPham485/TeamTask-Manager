@@ -6,6 +6,7 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
 model User {
   id        String   @id @default(uuid())
   username  String   @unique
@@ -14,83 +15,101 @@ model User {
   role      Role     @default(User)
   createdAt DateTime @default(now())
 
-  phone String?
-  hometown String?
-  bio String?
+  phone     String?
+  hometown  String?
+  bio       String?
   avatarUrl String?
 
-  passwordResetCodeHash String?
-  passwordResetExpiresAt DateTime?
-  passwordResetAttempts Int @default(0)
-  passwordResetResendAt DateTime?
+  passwordResetCodeHash   String?
+  passwordResetExpiresAt  DateTime?
+  passwordResetAttempts   Int       @default(0)
+  passwordResetResendAt   DateTime?
   passwordResetConsumedAt DateTime?
 
-  groupsOwned Group[] @relation("GroupOwner")
-  memberships GroupMember[]
-  tasksAssigned Task[] @relation("TaskAssignee")
-  tasksCreated Task[] @relation("TaskCreator")
-  messages Message[]
-  directThreadsA DirectThread[] @relation("DirectThreadUserA")
-  directThreadsB DirectThread[] @relation("DirectThreadUserB")
+  groupsOwned        Group[]         @relation("GroupOwner")
+  memberships        GroupMember[]
+  tasksAssigned      Task[]          @relation("TaskAssignee")
+  tasksCreated       Task[]          @relation("TaskCreator")
+  messages           Message[]
+  directThreadsA     DirectThread[]  @relation("DirectThreadUserA")
+  directThreadsB     DirectThread[]  @relation("DirectThreadUserB")
   directMessagesSent DirectMessage[] @relation("DirectMessageSender")
-  taskComments TaskComment[]
-  attachments Attachment[]
+  taskComments       TaskComment[]
+  attachments        Attachment[]
+  TaskMember         TaskMember[]
 }
 
 model Group {
-  id        String   @id @default(uuid())
-  name      String
-  groupCode String   @unique
-  ownerId   String
+  id         String   @id @default(uuid())
+  name       String
+  groupCode  String   @unique
+  ownerId    String
   coverImage String?
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
-  owner     User @relation("GroupOwner", fields: [ownerId], references: [id])
+  owner User @relation("GroupOwner", fields: [ownerId], references: [id])
 
-  members   GroupMember[]
-  tasks     Task[]
-  lists     List[]
-  labels    Label[]
-  messages  Message[]
+  members  GroupMember[]
+  tasks    Task[]
+  lists    List[]
+  labels   Label[]
+  messages Message[]
 }
 
 model GroupMember {
-  id        String @id @default(uuid())
-  userId    String
-  groupId   String
-  role      String
+  id      String @id @default(uuid())
+  userId  String
+  groupId String
+  role    String
 
-  user   User  @relation(fields: [userId], references: [id])
-  group  Group @relation(fields: [groupId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+  group Group @relation(fields: [groupId], references: [id])
 
-  @@unique([userId, groupId]) 
+  @@unique([userId, groupId])
 }
+
 model Task {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   title       String
   description String?
-  position    Int        @default(0)
+  position    Int       @default(0)
   groupId     String
   listId      String
   assignedTo  String?
   createdBy   String?
   dueDate     DateTime?
-  progress    Int      @default(0)
-  priority    String   @default("Low")
-  createdAt   DateTime @default(now())
+  progress    Int       @default(0)
+  priority    String    @default("Low")
+  createdAt   DateTime  @default(now())
 
-  group    Group @relation(fields: [groupId], references: [id])
-  list     List  @relation(fields: [listId], references: [id])
-  assignee User? @relation("TaskAssignee", fields: [assignedTo], references: [id])
-  creator  User? @relation("TaskCreator", fields: [createdBy], references: [id])
-  taskLabels TaskLabel[]
-  checklistItems ChecklistItem[]
-  comments TaskComment[]
-  attachments Attachment[]
+  group           Group           @relation(fields: [groupId], references: [id])
+  list            List            @relation(fields: [listId], references: [id])
+  assignee        User?           @relation("TaskAssignee", fields: [assignedTo], references: [id])
+  creator         User?           @relation("TaskCreator", fields: [createdBy], references: [id])
+  taskLabels      TaskLabel[]
+  taskMemberships TaskMember[]
+  checklistItems  ChecklistItem[]
+  comments        TaskComment[]
+  attachments     Attachment[]
 
   @@index([listId, position])
 }
 
+model TaskMember {
+  id          String         @id @default(uuid())
+  taskId      String
+  userId      String
+  role        TaskMemberRole @default(member)
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+}
 
 model TaskComment {
   id        String   @id @default(uuid())
@@ -114,7 +133,7 @@ model List {
   groupId   String
   createdAt DateTime @default(now())
 
-  group Group @relation(fields: [groupId], references: [id])
+  group Group  @relation(fields: [groupId], references: [id])
   tasks Task[]
 
   @@index([groupId, position])
@@ -127,7 +146,7 @@ model Label {
   groupId   String
   createdAt DateTime @default(now())
 
-  group Group @relation(fields: [groupId], references: [id])
+  group      Group       @relation(fields: [groupId], references: [id])
   taskLabels TaskLabel[]
 
   @@index([groupId])
@@ -165,22 +184,22 @@ model Message {
   senderId  String
   createdAt DateTime @default(now())
 
-  group  Group @relation(fields: [groupId], references: [id])
-  sender User  @relation(fields: [senderId], references: [id])
+  group       Group        @relation(fields: [groupId], references: [id])
+  sender      User         @relation(fields: [senderId], references: [id])
   attachments Attachment[]
 }
 
 model Attachment {
-  id        String   @id @default(uuid())
-  fileName  String
-  mimeType  String
-  size      Int
-  url       String
-  key       String
-  taskId    String?
-  messageId String?
+  id         String   @id @default(uuid())
+  fileName   String
+  mimeType   String
+  size       Int
+  url        String
+  key        String
+  taskId     String?
+  messageId  String?
   uploaderId String
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   task     Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   message  Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
@@ -221,7 +240,12 @@ model DirectMessage {
   @@index([senderId])
 }
 
-enum Role{
+enum Role {
   User
   Admin
+}
+
+enum TaskMemberRole {
+  leader
+  member
 }
