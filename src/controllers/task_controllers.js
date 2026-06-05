@@ -988,83 +988,116 @@ const withChecklistSummary = (task) => {
 const withDeadlineTaskMeta = (task) => {
     return withDeadlineMeta(withChecklistSummary(task));
 };
+
+const toDateKey = (date) => {
+    const value = new Date(date);
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+};
+
+const getCurrentMonthDateKeys = () => {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const dateKeys = [];
+
+    for (let date = new Date(firstDay); date <= lastDay; date.setDate(date.getDate() + 1)) {
+        dateKeys.push(toDateKey(date));
+    }
+
+    return dateKeys;
+};
+
+const buildDeadlineWhere = ({groupId, userId, membership, query}) => {
+    const {
+        scope = 'all',
+        assigneeId,
+        leaderId,
+        priority,
+        search
+    } = query;
+    const isAdmin = membership && ['owner', 'manager'].includes(membership.role);
+    const andFilters = [];
+
+    if (!isAdmin || scope === 'mine') {
+        andFilters.push({
+            taskMemberships: {
+                some: {
+                    userId
+                }
+            }
+        });
+    }
+
+    if (priority) {
+        andFilters.push({
+            priority
+        });
+    }
+
+    if (search) {
+        andFilters.push({
+            OR: [
+                {
+                    title: {
+                        contains: search,
+                        mode: 'insensitive'
+                    }
+                },
+                {
+                    description: {
+                        contains: search,
+                        mode: 'insensitive'
+                    }
+                }
+            ]
+        });
+    }
+
+    if (assigneeId) {
+        andFilters.push({
+            taskMemberships: {
+                some: {
+                    userId: assigneeId
+                }
+            }
+        });
+    }
+
+    if (leaderId) {
+        andFilters.push({
+            taskMemberships: {
+                some: {
+                    userId: leaderId,
+                    role: 'leader'
+                }
+            }
+        });
+    }
+
+    return {
+        groupId,
+        ...(andFilters.length > 0 ? {AND: andFilters} : {})
+    };
+};
+
 exports.getDeadlineTasks = async (req, res) => {
     try {
         const { groupId } = req.params;
-        const {
-            bucket = 'all',
-            scope = 'all',
-            assigneeId,
-            leaderId,
-            priority,
-            search
-        } = req.query;
-
+        const { bucket = 'all' } = req.query;
         const membership = req.groupMembership;
-        const isAdmin = membership && ['owner', 'manager'].includes(membership.role);
-        const andFilters = [];
-
-        if (!isAdmin || scope === 'mine') {
-            andFilters.push({
-                taskMemberships: {
-                    some: {
-                        userId: req.user.userId
-                    }
-                }
-            });
-        }
-
-        if (priority) {
-            andFilters.push({
-                priority
-            });
-        }
-
-        if (search) {
-            andFilters.push({
-                OR: [
-                    {
-                        title: {
-                            contains: search,
-                            mode: 'insensitive'
-                        }
-                    },
-                    {
-                        description: {
-                            contains: search,
-                            mode: 'insensitive'
-                        }
-                    }
-                ]
-            });
-        }
-
-        if (assigneeId) {
-            andFilters.push({
-                taskMemberships: {
-                    some: {
-                        userId: assigneeId
-                    }
-                }
-            });
-        }
-
-        if (leaderId) {
-            andFilters.push({
-                taskMemberships: {
-                    some: {
-                        userId: leaderId,
-                        role: 'leader'
-                    }
-                }
-            });
-        }
+        const where = buildDeadlineWhere({
+            groupId,
+            userId: req.user.userId,
+            membership,
+            query: req.query
+        });
 
         const tasks = await prisma.task.findMany({
-            where: {
-                groupId,
-                ...(andFilters.length > 0 ? { AND: andFilters } : {})
-            },
+            where,
             include: taskDeadlineInclude,
             orderBy: [
                 { dueDate: 'asc' },
@@ -1078,6 +1111,129 @@ exports.getDeadlineTasks = async (req, res) => {
             : enrichedTasks.filter((task) => task.deadlineBucket === bucket);
 
         res.json(filteredTasks);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getDeadlineSummary = async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const membership = req.groupMembership;
+        const isAdmin = membership && ['owner', 'manager'].includes(membership.role);
+        const where = buildDeadlineWhere({
+            groupId,
+            userId: req.user.userId,
+            membership,
+            query: req.query
+        });
+
+        const tasks = await prisma.task.findMany({
+            where,
+            include: taskDeadlineInclude,
+            orderBy: [
+                { dueDate: 'asc' },
+                { createdAt: 'asc' }
+            ]
+        });
+        const enrichedTasks = tasks.map(withDeadlineTaskMeta);
+        const bucketCounts = {
+            overdue: 0,
+            today: 0,
+            week: 0,
+            later: 0,
+            noDue: 0
+        };
+        const statusCounts = {
+            active: 0,
+            done: 0
+        };
+        const calendarDayMap = getCurrentMonthDateKeys().reduce((accumulator, dateKey) => {
+            accumulator[dateKey] = {
+                date: dateKey,
+                total: 0,
+                overdue: 0,
+                done: 0
+            };
+            return accumulator;
+        }, {});
+        const workloadMap = new Map();
+
+        enrichedTasks.forEach((task) => {
+            bucketCounts[task.deadlineBucket] += 1;
+
+            if (isTaskDone(task)) {
+                statusCounts.done += 1;
+            } else {
+                statusCounts.active += 1;
+            }
+
+            if (task.dueDate) {
+                const dueDateKey = toDateKey(task.dueDate);
+                const calendarDay = calendarDayMap[dueDateKey];
+
+                if (calendarDay) {
+                    calendarDay.total += 1;
+
+                    if (task.isOverdue) {
+                        calendarDay.overdue += 1;
+                    }
+
+                    if (isTaskDone(task)) {
+                        calendarDay.done += 1;
+                    }
+                }
+            }
+
+            if (isAdmin) {
+                (task.taskMemberships ?? []).forEach((membershipItem) => {
+                    const user = membershipItem.user;
+
+                    if (!user) {
+                        return;
+                    }
+
+                    if (!workloadMap.has(user.id)) {
+                        workloadMap.set(user.id, {
+                            userId: user.id,
+                            username: user.username,
+                            email: user.email,
+                            total: 0,
+                            overdue: 0,
+                            dueThisWeek: 0,
+                            active: 0,
+                            done: 0
+                        });
+                    }
+
+                    const workload = workloadMap.get(user.id);
+                    workload.total += 1;
+
+                    if (task.deadlineBucket === 'overdue') {
+                        workload.overdue += 1;
+                    }
+
+                    if (task.deadlineBucket === 'today' || task.deadlineBucket === 'week') {
+                        workload.dueThisWeek += 1;
+                    }
+
+                    if (isTaskDone(task)) {
+                        workload.done += 1;
+                    } else {
+                        workload.active += 1;
+                    }
+                });
+            }
+        });
+
+        res.json({
+            bucketCounts,
+            calendarDays: Object.values(calendarDayMap),
+            statusCounts,
+            workloadByMember: isAdmin
+                ? [...workloadMap.values()].sort((first, second) => second.total - first.total || first.username.localeCompare(second.username))
+                : []
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

@@ -6,6 +6,7 @@ const taskController = require('../controllers/task_controllers');
 const attachmentController = require('../controllers/attachment_controllers');
 
 router.post('/', verifyToken, isGroupMember, taskController.createTask);
+router.get('/group/:groupId/deadline/summary', verifyToken, isGroupMember, taskController.getDeadlineSummary);
 router.get('/group/:groupId/deadline', verifyToken, isGroupMember, taskController.getDeadlineTasks);
 router.get('/group/:groupId', verifyToken, isGroupMember, taskController.getTasksByGroup);
 router.put('/reorder', verifyToken, isGroupMember, taskController.reorderTasks);
