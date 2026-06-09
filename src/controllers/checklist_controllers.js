@@ -1,7 +1,9 @@
-const {PrismaClient} = require('@prisma/client');
+const { PrismaClient } = require('@prisma/client');
 require('dotenv').config();
 
 const prisma = new PrismaClient();
+
+const GROUP_ADMIN_ROLES = new Set(['owner', 'manager']);
 
 const clampPosition = (position, maxPosition) => {
     if (!Number.isInteger(position)) {
@@ -19,51 +21,74 @@ const clampPosition = (position, maxPosition) => {
     return position;
 };
 
-const ensureMembership = async (userId, groupId) => {
-    const membership = await prisma.groupMember.findUnique({
-        where: {
-            userId_groupId: {
-                userId,
-                groupId
-            }
-        },
-        select: {
-            id: true
-        }
-    });
-
-    return Boolean(membership);
+const isGroupAdmin = (membership) => {
+    return Boolean(membership && GROUP_ADMIN_ROLES.has(membership.role));
 };
 
-const getTaskWithAccessCheck = async (taskId, userId) => {
+const getTaskAccess = async (taskId, userId) => {
     const task = await prisma.task.findUnique({
-        where: {id: taskId},
+        where: { id: taskId },
         select: {
             id: true,
-            groupId: true
+            groupId: true,
+            taskMemberships: {
+                where: { userId },
+                select: {
+                    id: true,
+                    role: true
+                }
+            }
         }
     });
 
     if (!task) {
-        return {error: {status: 404, message: 'Task not found'}};
+        return { error: { status: 404, message: 'Task not found' } };
     }
 
-    const hasAccess = await ensureMembership(userId, task.groupId);
+    const membership = await prisma.groupMember.findUnique({
+        where: {
+            userId_groupId: {
+                userId,
+                groupId: task.groupId
+            }
+        },
+        select: {
+            id: true,
+            role: true
+        }
+    });
 
-    if (!hasAccess) {
-        return {error: {status: 403, message: 'You do not have permission to access this task'}};
+    if (!membership) {
+        return { error: { status: 403, message: 'You do not have permission to access this task' } };
     }
 
-    return {task};
+    const taskMembership = task.taskMemberships[0] ?? null;
+    const groupAdmin = isGroupAdmin(membership);
+    const leader = taskMembership?.role === 'leader';
+    const participant = Boolean(taskMembership);
+
+    return {
+        task: {
+            id: task.id,
+            groupId: task.groupId
+        },
+        access: {
+            canView: true,
+            canManageSections: groupAdmin || leader,
+            canEditItems: groupAdmin || leader || participant,
+            isParticipant: participant,
+            isLeader: leader,
+            isGroupAdmin: groupAdmin
+        }
+    };
 };
 
-const getChecklistWithAccessCheck = async (checklistId, userId) => {
-    const checklist = await prisma.checklistItem.findUnique({
-        where: {id: checklistId},
+const getSectionWithAccess = async (sectionId, userId) => {
+    const section = await prisma.checklistSection.findUnique({
+        where: { id: sectionId },
         select: {
             id: true,
             taskId: true,
-            isCompleted: true,
             task: {
                 select: {
                     groupId: true
@@ -72,248 +97,346 @@ const getChecklistWithAccessCheck = async (checklistId, userId) => {
         }
     });
 
-    if (!checklist) {
-        return {error: {status: 404, message: 'Checklist item not found'}};
+    if (!section) {
+        return { error: { status: 404, message: 'Checklist section not found' } };
     }
 
-    const hasAccess = await ensureMembership(userId, checklist.task.groupId);
+    const taskResult = await getTaskAccess(section.taskId, userId);
 
-    if (!hasAccess) {
-        return {error: {status: 403, message: 'You do not have permission to modify this checklist item'}};
+    if (taskResult.error) {
+        return taskResult;
     }
 
-    return {checklist};
+    return {
+        section,
+        access: taskResult.access
+    };
 };
 
-exports.createChecklistItem = async (req, res) => {
-    try {
-        const {taskId, title, position} = req.body;
+const getItemWithAccess = async (itemId, userId) => {
+    const item = await prisma.checklistItem.findUnique({
+        where: { id: itemId },
+        select: {
+            id: true,
+            taskId: true,
+            sectionId: true,
+            isCompleted: true
+        }
+    });
 
-        if (!taskId || !title) {
-            return res.status(400).json({error: 'Task ID and title are required'});
+    if (!item) {
+        return { error: { status: 404, message: 'Checklist item not found' } };
+    }
+
+    const taskResult = await getTaskAccess(item.taskId, userId);
+
+    if (taskResult.error) {
+        return taskResult;
+    }
+
+    return {
+        item,
+        access: taskResult.access
+    };
+};
+
+const normalizeSectionPositions = async (transaction, taskId) => {
+    const sections = await transaction.checklistSection.findMany({
+        where: { taskId },
+        orderBy: [
+            { position: 'asc' },
+            { createdAt: 'asc' }
+        ],
+        select: {
+            id: true
+        }
+    });
+
+    await Promise.all(sections.map((section, index) => transaction.checklistSection.update({
+        where: { id: section.id },
+        data: { position: index }
+    })));
+};
+
+const normalizeItemPositions = async (transaction, sectionId) => {
+    const items = await transaction.checklistItem.findMany({
+        where: { sectionId },
+        orderBy: [
+            { position: 'asc' },
+            { createdAt: 'asc' }
+        ],
+        select: {
+            id: true
+        }
+    });
+
+    await Promise.all(items.map((item, index) => transaction.checklistItem.update({
+        where: { id: item.id },
+        data: { position: index }
+    })));
+};
+
+const getOrCreateDefaultSection = async (transaction, taskId, userId) => {
+    const existingSection = await transaction.checklistSection.findFirst({
+        where: { taskId },
+        orderBy: [
+            { position: 'asc' },
+            { createdAt: 'asc' }
+        ]
+    });
+
+    if (existingSection) {
+        return existingSection;
+    }
+
+    return transaction.checklistSection.create({
+        data: {
+            taskId,
+            title: 'General',
+            position: 0,
+            createdBy: userId
+        }
+    });
+};
+
+exports.createChecklistSection = async (req, res) => {
+    try {
+        const { taskId, title, position } = req.body;
+
+        if (!taskId || !title?.trim()) {
+            return res.status(400).json({ error: 'Task ID and title are required' });
         }
 
-        const taskResult = await getTaskWithAccessCheck(taskId, req.user.userId);
+        const taskResult = await getTaskAccess(taskId, req.user.userId);
 
         if (taskResult.error) {
-            return res.status(taskResult.error.status).json({error: taskResult.error.message});
+            return res.status(taskResult.error.status).json({ error: taskResult.error.message });
         }
 
-        const existingItems = await prisma.checklistItem.findMany({
-            where: {taskId},
+        if (!taskResult.access.canManageSections) {
+            return res.status(403).json({ error: 'Only task leaders or group managers can manage checklist sections' });
+        }
+
+        const existingSections = await prisma.checklistSection.findMany({
+            where: { taskId },
             orderBy: [
-                {position: 'asc'},
-                {createdAt: 'asc'}
+                { position: 'asc' },
+                { createdAt: 'asc' }
             ],
             select: {
                 id: true
             }
         });
-
         const targetPosition = Number.isInteger(position)
-            ? clampPosition(position, existingItems.length)
-            : existingItems.length;
+            ? clampPosition(position, existingSections.length)
+            : existingSections.length;
 
         if (targetPosition === null) {
-            return res.status(400).json({error: 'Position must be an integer'});
+            return res.status(400).json({ error: 'Position must be an integer' });
         }
 
-        let createdItem = null;
+        let createdSection = null;
 
         await prisma.$transaction(async (transaction) => {
-            const reorderedIds = existingItems.map((item) => item.id);
+            const reorderedIds = existingSections.map((section) => section.id);
             reorderedIds.splice(targetPosition, 0, '__new__');
 
             await Promise.all(reorderedIds
-                .filter((itemId) => itemId !== '__new__')
-                .map((itemId, index) => transaction.checklistItem.update({
-                    where: {id: itemId},
-                    data: {position: index >= targetPosition ? index + 1 : index}
+                .filter((sectionId) => sectionId !== '__new__')
+                .map((sectionId, index) => transaction.checklistSection.update({
+                    where: { id: sectionId },
+                    data: { position: index >= targetPosition ? index + 1 : index }
                 })));
 
-            createdItem = await transaction.checklistItem.create({
+            createdSection = await transaction.checklistSection.create({
                 data: {
                     taskId,
-                    title,
-                    position: targetPosition
+                    title: title.trim(),
+                    position: targetPosition,
+                    createdBy: req.user.userId
+                },
+                include: {
+                    items: {
+                        orderBy: [
+                            { position: 'asc' },
+                            { createdAt: 'asc' }
+                        ]
+                    }
                 }
             });
 
-            const normalized = await transaction.checklistItem.findMany({
-                where: {taskId},
-                orderBy: [
-                    {position: 'asc'},
-                    {createdAt: 'asc'}
-                ],
-                select: {
-                    id: true
-                }
-            });
-
-            await Promise.all(normalized.map((item, index) => transaction.checklistItem.update({
-                where: {id: item.id},
-                data: {position: index}
-            })));
+            await normalizeSectionPositions(transaction, taskId);
         });
 
-        res.status(201).json(createdItem);
+        res.status(201).json(createdSection);
     } catch (error) {
-        res.status(500).json({error: error.message});
+        res.status(500).json({ error: error.message });
     }
 };
 
-exports.getChecklistByTask = async (req, res) => {
+exports.getChecklistSectionsByTask = async (req, res) => {
     try {
-        const {taskId} = req.params;
-
-        const taskResult = await getTaskWithAccessCheck(taskId, req.user.userId);
+        const { taskId } = req.params;
+        const taskResult = await getTaskAccess(taskId, req.user.userId);
 
         if (taskResult.error) {
-            return res.status(taskResult.error.status).json({error: taskResult.error.message});
+            return res.status(taskResult.error.status).json({ error: taskResult.error.message });
         }
 
-        const items = await prisma.checklistItem.findMany({
-            where: {taskId},
+        const sections = await prisma.checklistSection.findMany({
+            where: { taskId },
             orderBy: [
-                {position: 'asc'},
-                {createdAt: 'asc'}
-            ]
+                { position: 'asc' },
+                { createdAt: 'asc' }
+            ],
+            include: {
+                items: {
+                    orderBy: [
+                        { position: 'asc' },
+                        { createdAt: 'asc' }
+                    ]
+                }
+            }
         });
 
-        res.json(items);
+        res.json(sections);
     } catch (error) {
-        res.status(500).json({error: error.message});
+        res.status(500).json({ error: error.message });
     }
 };
 
-exports.updateChecklistItem = async (req, res) => {
+exports.updateChecklistSection = async (req, res) => {
     try {
-        const {id} = req.params;
-        const {title, isCompleted} = req.body;
+        const { id } = req.params;
+        const { title } = req.body;
+        const sectionResult = await getSectionWithAccess(id, req.user.userId);
 
-        const checklistResult = await getChecklistWithAccessCheck(id, req.user.userId);
-
-        if (checklistResult.error) {
-            return res.status(checklistResult.error.status).json({error: checklistResult.error.message});
+        if (sectionResult.error) {
+            return res.status(sectionResult.error.status).json({ error: sectionResult.error.message });
         }
 
-        const updated = await prisma.checklistItem.update({
-            where: {id},
+        if (!sectionResult.access.canManageSections) {
+            return res.status(403).json({ error: 'Only task leaders or group managers can manage checklist sections' });
+        }
+
+        if (!title?.trim()) {
+            return res.status(400).json({ error: 'Section title is required' });
+        }
+
+        const updated = await prisma.checklistSection.update({
+            where: { id },
             data: {
-                title,
-                isCompleted
+                title: title.trim()
+            },
+            include: {
+                items: {
+                    orderBy: [
+                        { position: 'asc' },
+                        { createdAt: 'asc' }
+                    ]
+                }
             }
         });
 
         res.json(updated);
     } catch (error) {
-        res.status(500).json({error: error.message});
+        res.status(500).json({ error: error.message });
     }
 };
 
-exports.toggleChecklistItem = async (req, res) => {
+exports.updateChecklistSectionPosition = async (req, res) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
+        const { position } = req.body;
+        const sectionResult = await getSectionWithAccess(id, req.user.userId);
 
-        const checklistResult = await getChecklistWithAccessCheck(id, req.user.userId);
-
-        if (checklistResult.error) {
-            return res.status(checklistResult.error.status).json({error: checklistResult.error.message});
+        if (sectionResult.error) {
+            return res.status(sectionResult.error.status).json({ error: sectionResult.error.message });
         }
 
-        const updated = await prisma.checklistItem.update({
-            where: {id},
-            data: {
-                isCompleted: !checklistResult.checklist.isCompleted
-            }
-        });
-
-        res.json(updated);
-    } catch (error) {
-        res.status(500).json({error: error.message});
-    }
-};
-
-exports.updateChecklistPosition = async (req, res) => {
-    try {
-        const {id} = req.params;
-        const {position} = req.body;
-
-        const checklistResult = await getChecklistWithAccessCheck(id, req.user.userId);
-
-        if (checklistResult.error) {
-            return res.status(checklistResult.error.status).json({error: checklistResult.error.message});
+        if (!sectionResult.access.canManageSections) {
+            return res.status(403).json({ error: 'Only task leaders or group managers can manage checklist sections' });
         }
 
-        const taskId = checklistResult.checklist.taskId;
-        const siblings = await prisma.checklistItem.findMany({
+        const siblings = await prisma.checklistSection.findMany({
             where: {
-                taskId,
-                NOT: {id}
+                taskId: sectionResult.section.taskId,
+                NOT: { id }
             },
             orderBy: [
-                {position: 'asc'},
-                {createdAt: 'asc'}
+                { position: 'asc' },
+                { createdAt: 'asc' }
             ],
             select: {
                 id: true
             }
         });
-
         const nextPosition = clampPosition(position, siblings.length);
 
         if (nextPosition === null) {
-            return res.status(400).json({error: 'Position must be an integer'});
+            return res.status(400).json({ error: 'Position must be an integer' });
         }
 
         await prisma.$transaction(async (transaction) => {
-            const reorderedIds = siblings.map((item) => item.id);
+            const reorderedIds = siblings.map((section) => section.id);
             reorderedIds.splice(nextPosition, 0, id);
 
-            await Promise.all(reorderedIds.map((itemId, index) => transaction.checklistItem.update({
-                where: {id: itemId},
-                data: {position: index}
+            await Promise.all(reorderedIds.map((sectionId, index) => transaction.checklistSection.update({
+                where: { id: sectionId },
+                data: { position: index }
             })));
         });
 
-        const updated = await prisma.checklistItem.findUnique({
-            where: {id}
+        const updated = await prisma.checklistSection.findUnique({
+            where: { id },
+            include: {
+                items: {
+                    orderBy: [
+                        { position: 'asc' },
+                        { createdAt: 'asc' }
+                    ]
+                }
+            }
         });
 
         res.json(updated);
     } catch (error) {
-        res.status(500).json({error: error.message});
+        res.status(500).json({ error: error.message });
     }
 };
 
-exports.reorderChecklistItems = async (req, res) => {
+exports.reorderChecklistSections = async (req, res) => {
     try {
-        const {taskId, itemIds} = req.body;
+        const { taskId, sectionIds } = req.body;
 
         if (!taskId) {
-            return res.status(400).json({error: 'Task ID is required'});
+            return res.status(400).json({ error: 'Task ID is required' });
         }
 
-        if (!Array.isArray(itemIds) || itemIds.length === 0) {
-            return res.status(400).json({error: 'itemIds must be a non-empty array'});
+        if (!Array.isArray(sectionIds) || sectionIds.length === 0) {
+            return res.status(400).json({ error: 'sectionIds must be a non-empty array' });
         }
 
-        const taskResult = await getTaskWithAccessCheck(taskId, req.user.userId);
+        const taskResult = await getTaskAccess(taskId, req.user.userId);
 
         if (taskResult.error) {
-            return res.status(taskResult.error.status).json({error: taskResult.error.message});
+            return res.status(taskResult.error.status).json({ error: taskResult.error.message });
         }
 
-        const uniqueIds = [...new Set(itemIds)];
-
-        if (uniqueIds.length !== itemIds.length) {
-            return res.status(400).json({error: 'itemIds must not contain duplicates'});
+        if (!taskResult.access.canManageSections) {
+            return res.status(403).json({ error: 'Only task leaders or group managers can manage checklist sections' });
         }
 
-        const items = await prisma.checklistItem.findMany({
+        const uniqueIds = [...new Set(sectionIds)];
+
+        if (uniqueIds.length !== sectionIds.length) {
+            return res.status(400).json({ error: 'sectionIds must not contain duplicates' });
+        }
+
+        const sections = await prisma.checklistSection.findMany({
             where: {
                 id: {
-                    in: itemIds
+                    in: sectionIds
                 },
                 taskId
             },
@@ -322,65 +445,461 @@ exports.reorderChecklistItems = async (req, res) => {
             }
         });
 
-        if (items.length !== itemIds.length) {
-            return res.status(400).json({error: 'One or more items do not belong to the task'});
+        if (sections.length !== sectionIds.length) {
+            return res.status(400).json({ error: 'One or more sections do not belong to the task' });
         }
 
-        await prisma.$transaction(itemIds.map((itemId, index) => prisma.checklistItem.update({
-            where: {id: itemId},
-            data: {position: index}
+        await prisma.$transaction(sectionIds.map((sectionId, index) => prisma.checklistSection.update({
+            where: { id: sectionId },
+            data: { position: index }
         })));
 
-        const updatedItems = await prisma.checklistItem.findMany({
-            where: {taskId},
+        const updatedSections = await prisma.checklistSection.findMany({
+            where: { taskId },
             orderBy: [
-                {position: 'asc'},
-                {createdAt: 'asc'}
-            ]
+                { position: 'asc' },
+                { createdAt: 'asc' }
+            ],
+            include: {
+                items: {
+                    orderBy: [
+                        { position: 'asc' },
+                        { createdAt: 'asc' }
+                    ]
+                }
+            }
         });
 
-        res.json(updatedItems);
+        res.json(updatedSections);
     } catch (error) {
-        res.status(500).json({error: error.message});
+        res.status(500).json({ error: error.message });
     }
 };
 
-exports.deleteChecklistItem = async (req, res) => {
+exports.deleteChecklistSection = async (req, res) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
+        const sectionResult = await getSectionWithAccess(id, req.user.userId);
 
-        const checklistResult = await getChecklistWithAccessCheck(id, req.user.userId);
-
-        if (checklistResult.error) {
-            return res.status(checklistResult.error.status).json({error: checklistResult.error.message});
+        if (sectionResult.error) {
+            return res.status(sectionResult.error.status).json({ error: sectionResult.error.message });
         }
 
-        const taskId = checklistResult.checklist.taskId;
+        if (!sectionResult.access.canManageSections) {
+            return res.status(403).json({ error: 'Only task leaders or group managers can manage checklist sections' });
+        }
 
         await prisma.$transaction(async (transaction) => {
-            await transaction.checklistItem.delete({
-                where: {id}
+            await transaction.checklistSection.delete({
+                where: { id }
             });
 
-            const remaining = await transaction.checklistItem.findMany({
-                where: {taskId},
+            await normalizeSectionPositions(transaction, sectionResult.section.taskId);
+        });
+
+        res.json({ message: 'Checklist section deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.createChecklistItem = async (req, res) => {
+    try {
+        const { taskId, sectionId, title, position } = req.body;
+
+        if (!title?.trim()) {
+            return res.status(400).json({ error: 'Checklist item title is required' });
+        }
+
+        let targetSection = null;
+        let targetTaskId = taskId;
+
+        if (sectionId) {
+            targetSection = await prisma.checklistSection.findUnique({
+                where: { id: sectionId },
+                select: {
+                    id: true,
+                    taskId: true
+                }
+            });
+
+            if (!targetSection) {
+                return res.status(404).json({ error: 'Checklist section not found' });
+            }
+
+            if (taskId && taskId !== targetSection.taskId) {
+                return res.status(400).json({ error: 'Section does not belong to task' });
+            }
+
+            targetTaskId = targetSection.taskId;
+        }
+
+        if (!targetTaskId) {
+            return res.status(400).json({ error: 'Task ID or section ID is required' });
+        }
+
+        const taskResult = await getTaskAccess(targetTaskId, req.user.userId);
+
+        if (taskResult.error) {
+            return res.status(taskResult.error.status).json({ error: taskResult.error.message });
+        }
+
+        if (!taskResult.access.canEditItems) {
+            return res.status(403).json({ error: 'Only task participants can edit checklist items' });
+        }
+
+        let createdItem = null;
+
+        await prisma.$transaction(async (transaction) => {
+            if (!targetSection) {
+                targetSection = await getOrCreateDefaultSection(transaction, targetTaskId, req.user.userId);
+            }
+
+            const existingItems = await transaction.checklistItem.findMany({
+                where: { sectionId: targetSection.id },
                 orderBy: [
-                    {position: 'asc'},
-                    {createdAt: 'asc'}
+                    { position: 'asc' },
+                    { createdAt: 'asc' }
                 ],
                 select: {
                     id: true
                 }
             });
+            const targetPosition = Number.isInteger(position)
+                ? clampPosition(position, existingItems.length)
+                : existingItems.length;
 
-            await Promise.all(remaining.map((item, index) => transaction.checklistItem.update({
-                where: {id: item.id},
-                data: {position: index}
-            })));
+            if (targetPosition === null) {
+                throw new Error('Position must be an integer');
+            }
+
+            const reorderedIds = existingItems.map((item) => item.id);
+            reorderedIds.splice(targetPosition, 0, '__new__');
+
+            await Promise.all(reorderedIds
+                .filter((itemId) => itemId !== '__new__')
+                .map((itemId, index) => transaction.checklistItem.update({
+                    where: { id: itemId },
+                    data: { position: index >= targetPosition ? index + 1 : index }
+                })));
+
+            createdItem = await transaction.checklistItem.create({
+                data: {
+                    taskId: targetTaskId,
+                    sectionId: targetSection.id,
+                    title: title.trim(),
+                    position: targetPosition,
+                    createdBy: req.user.userId
+                }
+            });
+
+            await normalizeItemPositions(transaction, targetSection.id);
         });
 
-        res.json({message: 'Checklist item deleted successfully'});
+        res.status(201).json(createdItem);
     } catch (error) {
-        res.status(500).json({error: error.message});
+        const status = error.message === 'Position must be an integer' ? 400 : 500;
+        res.status(status).json({ error: error.message });
+    }
+};
+
+exports.getChecklistByTask = async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const taskResult = await getTaskAccess(taskId, req.user.userId);
+
+        if (taskResult.error) {
+            return res.status(taskResult.error.status).json({ error: taskResult.error.message });
+        }
+
+        const items = await prisma.checklistItem.findMany({
+            where: { taskId },
+            orderBy: [
+                { section: { position: 'asc' } },
+                { position: 'asc' },
+                { createdAt: 'asc' }
+            ],
+            include: {
+                section: true
+            }
+        });
+
+        res.json(items);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.updateChecklistItem = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, isCompleted } = req.body;
+        const itemResult = await getItemWithAccess(id, req.user.userId);
+
+        if (itemResult.error) {
+            return res.status(itemResult.error.status).json({ error: itemResult.error.message });
+        }
+
+        if (!itemResult.access.canEditItems) {
+            return res.status(403).json({ error: 'Only task participants can edit checklist items' });
+        }
+
+        const data = {};
+
+        if (title !== undefined) {
+            if (!title?.trim()) {
+                return res.status(400).json({ error: 'Checklist item title is required' });
+            }
+
+            data.title = title.trim();
+        }
+
+        if (isCompleted !== undefined) {
+            data.isCompleted = Boolean(isCompleted);
+        }
+
+        const updated = await prisma.checklistItem.update({
+            where: { id },
+            data
+        });
+
+        res.json(updated);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.toggleChecklistItem = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const itemResult = await getItemWithAccess(id, req.user.userId);
+
+        if (itemResult.error) {
+            return res.status(itemResult.error.status).json({ error: itemResult.error.message });
+        }
+
+        if (!itemResult.access.canEditItems) {
+            return res.status(403).json({ error: 'Only task participants can edit checklist items' });
+        }
+
+        const updated = await prisma.checklistItem.update({
+            where: { id },
+            data: {
+                isCompleted: !itemResult.item.isCompleted
+            }
+        });
+
+        res.json(updated);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.updateChecklistPosition = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { sectionId, position } = req.body;
+        const itemResult = await getItemWithAccess(id, req.user.userId);
+
+        if (itemResult.error) {
+            return res.status(itemResult.error.status).json({ error: itemResult.error.message });
+        }
+
+        if (!itemResult.access.canEditItems) {
+            return res.status(403).json({ error: 'Only task participants can edit checklist items' });
+        }
+
+        const nextSectionId = sectionId || itemResult.item.sectionId;
+
+        if (sectionId) {
+            const section = await prisma.checklistSection.findUnique({
+                where: { id: sectionId },
+                select: {
+                    id: true,
+                    taskId: true
+                }
+            });
+
+            if (!section || section.taskId !== itemResult.item.taskId) {
+                return res.status(400).json({ error: 'Section does not belong to task' });
+            }
+        }
+
+        const siblings = await prisma.checklistItem.findMany({
+            where: {
+                sectionId: nextSectionId,
+                NOT: { id }
+            },
+            orderBy: [
+                { position: 'asc' },
+                { createdAt: 'asc' }
+            ],
+            select: {
+                id: true
+            }
+        });
+        const nextPosition = clampPosition(position, siblings.length);
+
+        if (nextPosition === null) {
+            return res.status(400).json({ error: 'Position must be an integer' });
+        }
+
+        await prisma.$transaction(async (transaction) => {
+            const reorderedIds = siblings.map((item) => item.id);
+            reorderedIds.splice(nextPosition, 0, id);
+
+            await Promise.all(reorderedIds.map((itemId, index) => transaction.checklistItem.update({
+                where: { id: itemId },
+                data: {
+                    sectionId: nextSectionId,
+                    position: index
+                }
+            })));
+
+            if (itemResult.item.sectionId !== nextSectionId) {
+                await normalizeItemPositions(transaction, itemResult.item.sectionId);
+            }
+        });
+
+        const updated = await prisma.checklistItem.findUnique({
+            where: { id }
+        });
+
+        res.json(updated);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.reorderChecklistItems = async (req, res) => {
+    try {
+        const { taskId, sectionId, itemIds } = req.body;
+
+        if (!Array.isArray(itemIds) || itemIds.length === 0) {
+            return res.status(400).json({ error: 'itemIds must be a non-empty array' });
+        }
+
+        let targetSectionId = sectionId;
+        let targetTaskId = taskId;
+
+        if (sectionId) {
+            const section = await prisma.checklistSection.findUnique({
+                where: { id: sectionId },
+                select: {
+                    id: true,
+                    taskId: true
+                }
+            });
+
+            if (!section) {
+                return res.status(404).json({ error: 'Checklist section not found' });
+            }
+
+            targetTaskId = section.taskId;
+        }
+
+        if (!targetTaskId) {
+            return res.status(400).json({ error: 'Task ID or section ID is required' });
+        }
+
+        const taskResult = await getTaskAccess(targetTaskId, req.user.userId);
+
+        if (taskResult.error) {
+            return res.status(taskResult.error.status).json({ error: taskResult.error.message });
+        }
+
+        if (!taskResult.access.canEditItems) {
+            return res.status(403).json({ error: 'Only task participants can edit checklist items' });
+        }
+
+        if (!targetSectionId) {
+            const firstItem = await prisma.checklistItem.findFirst({
+                where: {
+                    id: {
+                        in: itemIds
+                    },
+                    taskId: targetTaskId
+                },
+                select: {
+                    sectionId: true
+                }
+            });
+
+            if (!firstItem) {
+                return res.status(400).json({ error: 'One or more items do not belong to the task' });
+            }
+
+            targetSectionId = firstItem.sectionId;
+        }
+
+        const uniqueIds = [...new Set(itemIds)];
+
+        if (uniqueIds.length !== itemIds.length) {
+            return res.status(400).json({ error: 'itemIds must not contain duplicates' });
+        }
+
+        const items = await prisma.checklistItem.findMany({
+            where: {
+                id: {
+                    in: itemIds
+                },
+                taskId: targetTaskId,
+                sectionId: targetSectionId
+            },
+            select: {
+                id: true
+            }
+        });
+
+        if (items.length !== itemIds.length) {
+            return res.status(400).json({ error: 'One or more items do not belong to the section' });
+        }
+
+        await prisma.$transaction(itemIds.map((itemId, index) => prisma.checklistItem.update({
+            where: { id: itemId },
+            data: {
+                sectionId: targetSectionId,
+                position: index
+            }
+        })));
+
+        const updatedItems = await prisma.checklistItem.findMany({
+            where: { sectionId: targetSectionId },
+            orderBy: [
+                { position: 'asc' },
+                { createdAt: 'asc' }
+            ]
+        });
+
+        res.json(updatedItems);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.deleteChecklistItem = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const itemResult = await getItemWithAccess(id, req.user.userId);
+
+        if (itemResult.error) {
+            return res.status(itemResult.error.status).json({ error: itemResult.error.message });
+        }
+
+        if (!itemResult.access.canEditItems) {
+            return res.status(403).json({ error: 'Only task participants can edit checklist items' });
+        }
+
+        await prisma.$transaction(async (transaction) => {
+            await transaction.checklistItem.delete({
+                where: { id }
+            });
+
+            await normalizeItemPositions(transaction, itemResult.item.sectionId);
+        });
+
+        res.json({ message: 'Checklist item deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 };

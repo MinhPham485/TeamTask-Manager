@@ -88,6 +88,7 @@ model Task {
   creator         User?           @relation("TaskCreator", fields: [createdBy], references: [id])
   taskLabels      TaskLabel[]
   taskMemberships TaskMember[]
+  checklistSections ChecklistSection[]
   checklistItems  ChecklistItem[]
   comments        TaskComment[]
   attachments     Attachment[]
@@ -164,17 +165,37 @@ model TaskLabel {
   @@index([labelId])
 }
 
+model ChecklistSection {
+  id        String   @id @default(uuid())
+  title     String
+  position  Int      @default(0)
+  taskId    String
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task  Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  items ChecklistItem[]
+
+  @@index([taskId, position])
+}
+
 model ChecklistItem {
   id          String   @id @default(uuid())
   title       String
   isCompleted Boolean  @default(false)
   position    Int      @default(0)
   taskId      String
+  sectionId   String
+  createdBy   String?
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  task Task @relation(fields: [taskId], references: [id])
+  task    Task             @relation(fields: [taskId], references: [id])
+  section ChecklistSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@index([taskId, position])
+  @@index([sectionId, position])
 }
 
 model Message {
