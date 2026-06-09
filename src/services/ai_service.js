@@ -522,7 +522,8 @@ const askGroupAssistant = async ({groupId, userId, question}) => {
 
     const contextResult = await buildGroupContext({
         prisma,
-        groupId
+        groupId,
+        userId
     });
 
     if (contextResult.error) {

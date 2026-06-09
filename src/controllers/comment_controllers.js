@@ -1,53 +1,36 @@
 const {PrismaClient} = require('@prisma/client');
 require('dotenv').config();
+const {getTaskAccess} = require('../services/task_permission_service');
 
 const prisma = new PrismaClient();
 
-const ensureMembership = async (userId, groupId) => {
-    const membership = await prisma.groupMember.findUnique({
-        where: {
-            userId_groupId: {
-                userId,
-                groupId
-            }
-        },
-        select: {
-            id: true
-        }
-    });
-
-    return Boolean(membership);
-};
-
 const getTaskWithAccessCheck = async (taskId, userId) => {
-    const task = await prisma.task.findUnique({
-        where: {id: taskId},
-        select: {
-            id: true,
-            groupId: true
-        }
-    });
+    const taskResult = await getTaskAccess(taskId, userId);
 
-    if (!task) {
-        return {error: {status: 404, message: 'Task not found'}};
+    if (taskResult.error) {
+        return taskResult;
     }
 
-    const hasAccess = await ensureMembership(userId, task.groupId);
-
-    if (!hasAccess) {
+    if (!taskResult.access.canView) {
         return {error: {status: 403, message: 'You do not have permission to access this task'}};
     }
 
-    return {task};
+    return taskResult;
 };
 
 const getCommentWithAccessCheck = async (commentId, userId) => {
     const comment = await prisma.taskComment.findUnique({
         where: {id: commentId},
-        include: {
+        select: {
+            id: true,
+            content: true,
+            taskId: true,
+            senderId: true,
+            createdAt: true,
+            updatedAt: true,
             task: {
                 select: {
-                    groupId: true
+                    id: true
                 }
             }
         }
@@ -57,10 +40,10 @@ const getCommentWithAccessCheck = async (commentId, userId) => {
         return {error: {status: 404, message: 'Comment not found'}};
     }
 
-    const hasAccess = await ensureMembership(userId, comment.task.groupId);
+    const taskResult = await getTaskWithAccessCheck(comment.task.id, userId);
 
-    if (!hasAccess) {
-        return {error: {status: 403, message: 'You do not have permission to access this comment'}};
+    if (taskResult.error) {
+        return {error: {status: taskResult.error.status, message: 'You do not have permission to access this comment'}};
     }
 
     return {comment};
@@ -78,6 +61,10 @@ exports.createComment = async (req, res) => {
 
         if (taskResult.error) {
             return res.status(taskResult.error.status).json({error: taskResult.error.message});
+        }
+
+        if (!taskResult.access.canParticipate) {
+            return res.status(403).json({error: 'Only task participants can comment on this task'});
         }
 
         const comment = await prisma.taskComment.create({

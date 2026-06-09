@@ -1,4 +1,5 @@
 const DEFAULT_TASK_LIMIT = 100;
+const {isGroupAdmin} = require('./task_permission_service');
 
 const isDoneList = (listName) => {
     const normalized = String(listName || '').trim().toLowerCase();
@@ -18,13 +19,39 @@ const formatDate = (value) => {
     return new Date(value).toISOString().slice(0, 10);
 };
 
-const buildGroupContext = async ({prisma, groupId, taskLimit = DEFAULT_TASK_LIMIT}) => {
+const buildGroupContext = async ({prisma, groupId, userId, taskLimit = DEFAULT_TASK_LIMIT}) => {
+    const membership = userId
+        ? await prisma.groupMember.findUnique({
+            where: {
+                userId_groupId: {
+                    userId,
+                    groupId
+                }
+            },
+            select: {
+                id: true,
+                role: true
+            }
+        })
+        : null;
+
+    const taskAccessWhere = isGroupAdmin(membership)
+        ? {}
+        : {
+            taskMemberships: {
+                some: {
+                    userId: userId || '__no-user__'
+                }
+            }
+        };
+
     const group = await prisma.group.findUnique({
         where: {id: groupId},
         select: {
             id: true,
             name: true,
             tasks: {
+                where: taskAccessWhere,
                 take: taskLimit,
                 orderBy: {
                     createdAt: 'desc'

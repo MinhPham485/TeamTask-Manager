@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 require('dotenv').config();
 const prisma = new PrismaClient();
+const { getTaskAccessFilter, isGroupAdmin } = require('../services/task_permission_service');
 
 const ALLOWED_PRIORITIES = new Set(['Low', 'Medium', 'High', 'Done']);
 
@@ -294,9 +295,16 @@ exports.createTask = async (req, res) => {
 exports.getTasksByGroup = async (req, res) => {
     try {
         const { groupId } = req.params;
+        const accessFilter = getTaskAccessFilter({
+            userId: req.user.userId,
+            membership: req.groupMembership
+        });
         const [tasks, lists] = await Promise.all([
             prisma.task.findMany({
-                where: { groupId },
+                where: {
+                    groupId,
+                    ...accessFilter
+                },
                 orderBy: [
                     { position: 'asc' },
                     { createdAt: 'asc' }
@@ -1019,7 +1027,7 @@ const buildDeadlineWhere = ({groupId, userId, membership, query}) => {
         priority,
         search
     } = query;
-    const isAdmin = membership && ['owner', 'manager'].includes(membership.role);
+    const isAdmin = isGroupAdmin(membership);
     const andFilters = [];
 
     if (!isAdmin || scope === 'mine') {
@@ -1120,7 +1128,7 @@ exports.getDeadlineSummary = async (req, res) => {
     try {
         const { groupId } = req.params;
         const membership = req.groupMembership;
-        const isAdmin = membership && ['owner', 'manager'].includes(membership.role);
+        const isAdmin = isGroupAdmin(membership);
         const where = buildDeadlineWhere({
             groupId,
             userId: req.user.userId,

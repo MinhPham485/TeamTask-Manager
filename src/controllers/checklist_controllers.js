@@ -1,9 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
 require('dotenv').config();
+const { getTaskAccess } = require('../services/task_permission_service');
 
 const prisma = new PrismaClient();
-
-const GROUP_ADMIN_ROLES = new Set(['owner', 'manager']);
 
 const clampPosition = (position, maxPosition) => {
     if (!Number.isInteger(position)) {
@@ -21,67 +20,6 @@ const clampPosition = (position, maxPosition) => {
     return position;
 };
 
-const isGroupAdmin = (membership) => {
-    return Boolean(membership && GROUP_ADMIN_ROLES.has(membership.role));
-};
-
-const getTaskAccess = async (taskId, userId) => {
-    const task = await prisma.task.findUnique({
-        where: { id: taskId },
-        select: {
-            id: true,
-            groupId: true,
-            taskMemberships: {
-                where: { userId },
-                select: {
-                    id: true,
-                    role: true
-                }
-            }
-        }
-    });
-
-    if (!task) {
-        return { error: { status: 404, message: 'Task not found' } };
-    }
-
-    const membership = await prisma.groupMember.findUnique({
-        where: {
-            userId_groupId: {
-                userId,
-                groupId: task.groupId
-            }
-        },
-        select: {
-            id: true,
-            role: true
-        }
-    });
-
-    if (!membership) {
-        return { error: { status: 403, message: 'You do not have permission to access this task' } };
-    }
-
-    const taskMembership = task.taskMemberships[0] ?? null;
-    const groupAdmin = isGroupAdmin(membership);
-    const leader = taskMembership?.role === 'leader';
-    const participant = Boolean(taskMembership);
-
-    return {
-        task: {
-            id: task.id,
-            groupId: task.groupId
-        },
-        access: {
-            canView: true,
-            canManageSections: groupAdmin || leader,
-            canEditItems: groupAdmin || leader || participant,
-            isParticipant: participant,
-            isLeader: leader,
-            isGroupAdmin: groupAdmin
-        }
-    };
-};
 
 const getSectionWithAccess = async (sectionId, userId) => {
     const section = await prisma.checklistSection.findUnique({
@@ -544,7 +482,7 @@ exports.createChecklistItem = async (req, res) => {
             return res.status(taskResult.error.status).json({ error: taskResult.error.message });
         }
 
-        if (!taskResult.access.canEditItems) {
+        if (!taskResult.access.canParticipate) {
             return res.status(403).json({ error: 'Only task participants can edit checklist items' });
         }
 
@@ -640,7 +578,7 @@ exports.updateChecklistItem = async (req, res) => {
             return res.status(itemResult.error.status).json({ error: itemResult.error.message });
         }
 
-        if (!itemResult.access.canEditItems) {
+        if (!itemResult.access.canParticipate) {
             return res.status(403).json({ error: 'Only task participants can edit checklist items' });
         }
 
@@ -678,7 +616,7 @@ exports.toggleChecklistItem = async (req, res) => {
             return res.status(itemResult.error.status).json({ error: itemResult.error.message });
         }
 
-        if (!itemResult.access.canEditItems) {
+        if (!itemResult.access.canParticipate) {
             return res.status(403).json({ error: 'Only task participants can edit checklist items' });
         }
 
@@ -705,7 +643,7 @@ exports.updateChecklistPosition = async (req, res) => {
             return res.status(itemResult.error.status).json({ error: itemResult.error.message });
         }
 
-        if (!itemResult.access.canEditItems) {
+        if (!itemResult.access.canParticipate) {
             return res.status(403).json({ error: 'Only task participants can edit checklist items' });
         }
 
@@ -808,7 +746,7 @@ exports.reorderChecklistItems = async (req, res) => {
             return res.status(taskResult.error.status).json({ error: taskResult.error.message });
         }
 
-        if (!taskResult.access.canEditItems) {
+        if (!taskResult.access.canParticipate) {
             return res.status(403).json({ error: 'Only task participants can edit checklist items' });
         }
 
@@ -886,7 +824,7 @@ exports.deleteChecklistItem = async (req, res) => {
             return res.status(itemResult.error.status).json({ error: itemResult.error.message });
         }
 
-        if (!itemResult.access.canEditItems) {
+        if (!itemResult.access.canParticipate) {
             return res.status(403).json({ error: 'Only task participants can edit checklist items' });
         }
 

@@ -1,5 +1,6 @@
 const {PrismaClient} = require('@prisma/client');
 const {uploadConfig} = require('./upload_controllers');
+const {getTaskAccess} = require('../services/task_permission_service');
 
 const prisma = new PrismaClient();
 const MAX_MESSAGE_LENGTH = 2000;
@@ -45,13 +46,20 @@ const validateAttachmentPayload = ({fileName, mimeType, size, url, key}) => {
 exports.createTaskAttachment = async (req, res) => {
     try {
         const taskId = req.params.id;
-        const task = req.task || await prisma.task.findUnique({
-            where: {id: taskId},
-            select: {id: true, groupId: true}
-        });
+        let task = req.task;
 
         if (!task) {
-            return res.status(404).json({error: 'Task not found'});
+            const taskResult = await getTaskAccess(taskId, req.user.userId);
+
+            if (taskResult.error) {
+                return res.status(taskResult.error.status).json({error: taskResult.error.message});
+            }
+
+            if (!taskResult.access.canParticipate) {
+                return res.status(403).json({error: 'Only task participants can add attachments'});
+            }
+
+            task = taskResult.task;
         }
 
         const payloadError = validateAttachmentPayload(req.body || {});
@@ -81,13 +89,20 @@ exports.createTaskAttachment = async (req, res) => {
 exports.getTaskAttachments = async (req, res) => {
     try {
         const taskId = req.params.id;
-        const task = req.task || await prisma.task.findUnique({
-            where: {id: taskId},
-            select: {id: true, groupId: true}
-        });
+        let task = req.task;
 
         if (!task) {
-            return res.status(404).json({error: 'Task not found'});
+            const taskResult = await getTaskAccess(taskId, req.user.userId);
+
+            if (taskResult.error) {
+                return res.status(taskResult.error.status).json({error: taskResult.error.message});
+            }
+
+            if (!taskResult.access.canView) {
+                return res.status(403).json({error: 'You do not have permission to access this task'});
+            }
+
+            task = taskResult.task;
         }
 
         const attachments = await prisma.attachment.findMany({

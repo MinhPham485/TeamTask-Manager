@@ -1,4 +1,5 @@
 const {PrismaClient} = require('@prisma/client');
+const {isGroupAdmin} = require('./task_permission_service');
 
 const prisma = new PrismaClient();
 
@@ -417,6 +418,7 @@ const handleAiActionIntent = async ({userId, question, requestedGroupId}) => {
         },
         select: {
             groupId: true,
+            role: true,
             group: {
                 select: {
                     id: true,
@@ -445,6 +447,16 @@ const handleAiActionIntent = async ({userId, question, requestedGroupId}) => {
                 }
             },
             status: 200
+        };
+    }
+
+    if ((intent.type === 'create_list' || intent.type === 'create_task') && !isGroupAdmin(targetGroup)) {
+        return {
+            error: {
+                code: 'FORBIDDEN',
+                message: 'Only group owner or manager can create lists or tasks'
+            },
+            status: 403
         };
     }
 
