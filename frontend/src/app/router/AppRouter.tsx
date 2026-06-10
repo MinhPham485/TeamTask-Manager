@@ -8,6 +8,7 @@ import { ResetPasswordPage } from "@/pages/ResetPasswordPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { GroupDetailPage } from "@/pages/GroupDetailPage";
 import { BoardPage } from "@/pages/BoardPage";
+import { DeadlinePage } from "@/pages/DeadlinePage";
 import { ChatPage } from "@/pages/ChatPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
@@ -60,6 +61,14 @@ export function AppRouter() {
           element={
             <AppShell>
               <BoardPage />
+            </AppShell>
+          }
+        />
+        <Route
+          path="/deadline"
+          element={
+            <AppShell>
+              <DeadlinePage />
             </AppShell>
           }
         />

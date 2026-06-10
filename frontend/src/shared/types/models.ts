@@ -27,7 +27,7 @@ export type GroupMember = {
   id: string;
   groupId: string;
   userId: string;
-  role: "owner" | "member";
+  role: "owner" | "manager" | "member";
   user?: User;
 };
 
@@ -35,7 +35,7 @@ export type GroupMembership = {
   id: string;
   userId: string;
   groupId: string;
-  role: "owner" | "member";
+  role: "owner" | "manager" | "member";
   group: Group;
 };
 
@@ -64,8 +64,58 @@ export type Task = {
   creator?: User | null;
   taskLabels?: Array<{ label: Label }>;
   checklistItems?: ChecklistItem[];
+  taskMemberships?: TaskMembership[];
   progress: number;
   priority: "High" | "Medium" | "Low" | "Done";
+};
+
+export type TaskMembership = {
+  id: string;
+  taskId: string;
+  userId: string;
+  role: "leader" | "member";
+  completedAt?: string | null;
+  createdAt?: string;
+  user?: User;
+};
+
+export type DeadlineBucket = "overdue" | "today" | "week" | "later" | "noDue";
+
+export type DeadlineTask = Task & {
+  deadlineBucket: DeadlineBucket;
+  isOverdue: boolean;
+  daysOverdue: number;
+  viewerCanOpen?: boolean;
+  viewerCanManage?: boolean;
+  checklistSummary?: {
+    completed: number;
+    total: number;
+    percent: number;
+  };
+};
+
+export type DeadlineSummary = {
+  bucketCounts: Record<DeadlineBucket, number>;
+  calendarDays: Array<{
+    date: string;
+    total: number;
+    overdue: number;
+    done: number;
+  }>;
+  statusCounts: {
+    active: number;
+    done: number;
+  };
+  workloadByMember: Array<{
+    userId: string;
+    username: string;
+    email: string;
+    total: number;
+    overdue: number;
+    dueThisWeek: number;
+    active: number;
+    done: number;
+  }>;
 };
 
 export type Label = {
@@ -78,6 +128,7 @@ export type Label = {
 export type ChecklistItem = {
   id: string;
   taskId: string;
+  deadlineTaskId?: string;
   title: string;
   isCompleted: boolean;
   position: number;

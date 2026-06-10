@@ -8,6 +8,7 @@ import { FloatingAiChat } from "@/features/chat/components/FloatingAiChat";
 const navItems = [
   { to: "/dashboard", label: "Groups", icon: "groups" },
   { to: "/board", label: "Dashboard", icon: "dashboard" },
+  { to: "/deadline", label: "Deadline", icon: "deadline" },
   { to: "/chat", label: "Chat", icon: "chat" },
 ];
 
@@ -31,6 +32,20 @@ function NavIcon({ name }: { name: string }) {
         <path d="M5 6.5h14v9H9l-4 3v-12Z" />
         <path d="M8 10h8" />
         <path d="M8 13h5" />
+      </svg>
+    );
+  }
+
+  if (name === "deadline") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 3v4" />
+        <path d="M17 3v4" />
+        <path d="M4 8h16" />
+        <path d="M5 5h14v15H5V5Z" />
+        <path d="M8 13h2" />
+        <path d="M14 13h2" />
+        <path d="M8 17h2" />
       </svg>
     );
   }

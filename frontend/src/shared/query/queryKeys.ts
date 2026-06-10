@@ -12,6 +12,11 @@ export const queryKeys = {
     tasks: (groupId: string) => ["board", groupId, "tasks"] as const,
     labels: (groupId: string) => ["board", groupId, "labels"] as const,
   },
+  deadline: {
+    tasks: (groupId: string) => ["deadline", groupId, "tasks"] as const,
+    task: (taskId: string) => ["deadline", "task", taskId] as const,
+    summary: (groupId: string) => ["deadline", groupId, "summary"] as const,
+  },
   checklists: {
     byTask: (taskId: string) => ["checklists", taskId] as const,
   },
