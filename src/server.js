@@ -6,6 +6,7 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth_routes');
 const groupRoutes = require('./routes/group_routes');
 const taskRoutes = require('./routes/task_routes');
+const deadlineTaskRoutes = require('./routes/deadline_task_routes');
 const listRoutes = require('./routes/list_routes');
 const labelRoutes = require('./routes/label_routes');
 const checklistRoutes = require('./routes/checklist_routes');
@@ -62,6 +63,7 @@ app.use(metricsMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/deadline-tasks', deadlineTaskRoutes);
 app.use('/api/lists', listRoutes);
 app.use('/api/labels', labelRoutes);
 app.use('/api/checklists', checklistRoutes);
@@ -120,4 +122,3 @@ if (require.main === module) {
 app.get('/metrics', metricsHandler);
 
 module.exports = app;
-
