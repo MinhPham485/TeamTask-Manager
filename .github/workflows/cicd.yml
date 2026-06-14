@@ -20,7 +20,7 @@ env:
 
 jobs:
   backend-ci:
-    name: Backend
+    name: Backend CI
     runs-on: ubuntu-latest
     services:
       postgres:
