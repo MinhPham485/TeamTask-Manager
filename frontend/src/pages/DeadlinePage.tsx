@@ -6,7 +6,7 @@ import { authStore } from "@/features/auth/store/authStore";
 import { groupApi } from "@/features/groups/api/groupApi";
 import { getChecklistSummary, getPriorityClass, getTaskProgress, sortByPosition } from "@/features/board/utils/boardUtils";
 import { queryKeys } from "@/shared/query/queryKeys";
-import { DeadlineSummary, DeadlineTask, GroupMember, Task } from "@/shared/types/models";
+import { ChecklistItem, DeadlineChecklistSection, DeadlineSummary, DeadlineTask, GroupMember, Task } from "@/shared/types/models";
 
 function formatDueDate(task: DeadlineTask) {
   if (!task.dueDate) {
@@ -31,6 +31,18 @@ function getMemberInitials(task: DeadlineTask) {
     .map((membership) => membership.user?.username?.slice(0, 1).toUpperCase() || "?");
 }
 
+function buildChecklistItemsFromSections(sections?: DeadlineChecklistSection[]) {
+  return (sections ?? []).flatMap((section) => sortByPosition(section.items ?? []));
+}
+
+function getDeadlineDisplayProgress(task: DeadlineTask) {
+  if (task.checklistSummary?.total) {
+    return task.checklistSummary.percent;
+  }
+
+  return getTaskProgress(task);
+}
+
 function MetricCard({ label, value, tone }: { label: string; value: number | string; tone?: "danger" | "success" }) {
   return (
     <article className={tone ? `deadline-metric ${tone}` : "deadline-metric"}>
@@ -49,7 +61,7 @@ function DeadlineTaskCard({
   selected?: boolean;
   onSelect?: () => void;
 }) {
-  const progress = getTaskProgress(task);
+  const progress = getDeadlineDisplayProgress(task);
   const initials = getMemberInitials(task);
   const locked = task.viewerCanOpen === false;
 
@@ -222,18 +234,38 @@ function DeadlineTaskDetail({
   isLoading,
   isError,
   canManage,
+  canManageSections,
+  canManageItems,
   groupMembers,
   memberToAdd,
   addMemberError,
   isAddingMember,
+  newSectionTitle,
   newChecklistTitle,
+  editingSectionId,
+  editingSectionTitle,
+  editingItemId,
+  editingItemTitle,
   checklistError,
+  isCreatingSection,
   isCreatingChecklist,
+  isUpdatingChecklist,
   isTogglingChecklist,
   isDeletingChecklist,
+  onSectionTitleChange,
   onChecklistTitleChange,
+  onStartEditSection,
+  onCancelEditSection,
+  onEditingSectionTitleChange,
+  onSaveSection,
+  onDeleteSection,
+  onStartEditItem,
+  onCancelEditItem,
+  onEditingItemTitleChange,
+  onSaveItem,
   onMemberToAddChange,
   onAddMember,
+  onCreateChecklistSection,
   onCreateChecklistItem,
   onToggleChecklistItem,
   onDeleteChecklistItem,
@@ -243,19 +275,39 @@ function DeadlineTaskDetail({
   isLoading: boolean;
   isError: boolean;
   canManage: boolean;
+  canManageSections: boolean;
+  canManageItems: boolean;
   groupMembers: GroupMember[];
   memberToAdd: string;
   addMemberError: string | null;
   isAddingMember: boolean;
+  newSectionTitle: string;
   newChecklistTitle: string;
+  editingSectionId: string | null;
+  editingSectionTitle: string;
+  editingItemId: string | null;
+  editingItemTitle: string;
   checklistError: string | null;
+  isCreatingSection: boolean;
   isCreatingChecklist: boolean;
+  isUpdatingChecklist: boolean;
   isTogglingChecklist: boolean;
   isDeletingChecklist: boolean;
+  onSectionTitleChange: (value: string) => void;
   onChecklistTitleChange: (value: string) => void;
+  onStartEditSection: (section: DeadlineChecklistSection) => void;
+  onCancelEditSection: () => void;
+  onEditingSectionTitleChange: (value: string) => void;
+  onSaveSection: (event: FormEvent) => void;
+  onDeleteSection: (sectionId: string) => void;
+  onStartEditItem: (item: ChecklistItem) => void;
+  onCancelEditItem: () => void;
+  onEditingItemTitleChange: (value: string) => void;
+  onSaveItem: (event: FormEvent) => void;
   onMemberToAddChange: (value: string) => void;
   onAddMember: (event: FormEvent) => void;
-  onCreateChecklistItem: (event: FormEvent) => void;
+  onCreateChecklistSection: (event: FormEvent) => void;
+  onCreateChecklistItem: (event: FormEvent, sectionId: string) => void;
   onToggleChecklistItem: (itemId: string) => void;
   onDeleteChecklistItem: (itemId: string) => void;
 }) {
@@ -294,9 +346,10 @@ function DeadlineTaskDetail({
     );
   }
 
-  const progress = getTaskProgress(task);
-  const checklistItems = sortByPosition(task.checklistItems ?? []);
+  const checklistSections = sortByPosition(task.checklistSections ?? []);
+  const checklistItems = buildChecklistItemsFromSections(checklistSections);
   const checklistSummary = getChecklistSummary(checklistItems);
+  const progress = checklistSummary.total > 0 ? checklistSummary.percent : getTaskProgress(task);
   const members = task.taskMemberships ?? [];
   const assignableGroupMembers = groupMembers.filter((membership) => {
     return !members.some((taskMembership) => taskMembership.userId === membership.userId);
@@ -372,30 +425,110 @@ function DeadlineTaskDetail({
         <div className="task-checklist-progress" aria-label={`Checklist progress ${checklistSummary.percent}%`}>
           <span style={{ width: `${checklistSummary.percent}%` }} />
         </div>
-        <form className="deadline-checklist-form" onSubmit={onCreateChecklistItem}>
-          <input
-            value={newChecklistTitle}
-            onChange={(event) => onChecklistTitleChange(event.target.value)}
-            placeholder="Add checklist item"
-            maxLength={160}
-          />
-          <button type="submit" disabled={isCreatingChecklist}>
-            {isCreatingChecklist ? "Adding..." : "Add"}
-          </button>
-        </form>
+        {canManageSections ? (
+          <form className="deadline-checklist-form" onSubmit={onCreateChecklistSection}>
+            <input
+              value={newSectionTitle}
+              onChange={(event) => onSectionTitleChange(event.target.value)}
+              placeholder="Add checklist section"
+              maxLength={160}
+            />
+            <button type="submit" disabled={isCreatingSection}>
+              {isCreatingSection ? "Adding..." : "Add section"}
+            </button>
+          </form>
+        ) : null}
         {checklistError ? <p className="error-text">{checklistError}</p> : null}
-        {checklistItems.length === 0 ? <p className="muted-text">No checklist items yet.</p> : null}
+        {checklistSections.length === 0 ? <p className="muted-text">No checklist sections yet.</p> : null}
         <div className="deadline-checklist-list">
-          {checklistItems.map((item) => (
-            <article key={item.id} className={item.isCompleted ? "deadline-checklist-item completed" : "deadline-checklist-item"}>
-              <label>
-                <input type="checkbox" checked={item.isCompleted} onChange={() => onToggleChecklistItem(item.id)} disabled={isTogglingChecklist} />
-                <span>{item.title}</span>
-              </label>
-              <button type="button" className="danger-button" onClick={() => onDeleteChecklistItem(item.id)} disabled={isDeletingChecklist}>
-                Delete
-              </button>
-            </article>
+          {checklistSections.map((section) => (
+            <div key={section.id} className="task-detail-section">
+              <div className="task-section-heading">
+                {editingSectionId === section.id ? (
+                  <form className="deadline-checklist-form" onSubmit={onSaveSection}>
+                    <input
+                      value={editingSectionTitle}
+                      onChange={(event) => onEditingSectionTitleChange(event.target.value)}
+                      placeholder="Section title"
+                      maxLength={160}
+                    />
+                    <button type="submit" disabled={isUpdatingChecklist}>
+                      {isUpdatingChecklist ? "Saving..." : "Save"}
+                    </button>
+                    <button type="button" onClick={onCancelEditSection}>
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <h3>{section.title}</h3>
+                    {canManageSections ? (
+                      <div className="task-progress-controls">
+                        <button type="button" onClick={() => onStartEditSection(section)}>
+                          Edit
+                        </button>
+                        <button type="button" className="danger-button" onClick={() => onDeleteSection(section.id)} disabled={isDeletingChecklist}>
+                          Delete
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+
+              {canManageItems ? (
+                <form className="deadline-checklist-form" onSubmit={(event) => onCreateChecklistItem(event, section.id)}>
+                  <input
+                    value={newChecklistTitle}
+                    onChange={(event) => onChecklistTitleChange(event.target.value)}
+                    placeholder="Add checklist item"
+                    maxLength={160}
+                  />
+                  <button type="submit" disabled={isCreatingChecklist}>
+                    {isCreatingChecklist ? "Adding..." : "Add"}
+                  </button>
+                </form>
+              ) : null}
+
+              {sortByPosition(section.items ?? []).length === 0 ? <p className="muted-text">No checklist items yet.</p> : null}
+              {sortByPosition(section.items ?? []).map((item) => (
+                <article key={item.id} className={item.isCompleted ? "deadline-checklist-item completed" : "deadline-checklist-item"}>
+                  {editingItemId === item.id ? (
+                    <form className="deadline-checklist-form" onSubmit={onSaveItem}>
+                      <input
+                        value={editingItemTitle}
+                        onChange={(event) => onEditingItemTitleChange(event.target.value)}
+                        placeholder="Checklist item title"
+                        maxLength={160}
+                      />
+                      <button type="submit" disabled={isUpdatingChecklist}>
+                        {isUpdatingChecklist ? "Saving..." : "Save"}
+                      </button>
+                      <button type="button" onClick={onCancelEditItem}>
+                        Cancel
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <label>
+                        <input type="checkbox" checked={item.isCompleted} onChange={() => onToggleChecklistItem(item.id)} disabled={!canManageItems || isTogglingChecklist} />
+                        <span>{item.title}</span>
+                      </label>
+                      {canManageItems ? (
+                        <div className="task-progress-controls">
+                          <button type="button" onClick={() => onStartEditItem(item)}>
+                            Edit
+                          </button>
+                          <button type="button" className="danger-button" onClick={() => onDeleteChecklistItem(item.id)} disabled={isDeletingChecklist}>
+                            Delete
+                          </button>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </article>
+              ))}
+            </div>
           ))}
         </div>
       </section>
@@ -422,7 +555,12 @@ export function DeadlinePage() {
   const [createDueDate, setCreateDueDate] = useState("");
   const [createPriority, setCreatePriority] = useState<Task["priority"]>("Medium");
   const [createError, setCreateError] = useState<string | null>(null);
+  const [newSectionTitle, setNewSectionTitle] = useState("");
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [editingSectionTitle, setEditingSectionTitle] = useState("");
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingItemTitle, setEditingItemTitle] = useState("");
   const [checklistError, setChecklistError] = useState<string | null>(null);
   const [memberToAdd, setMemberToAdd] = useState("");
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
@@ -527,13 +665,46 @@ export function DeadlinePage() {
   });
 
   const createChecklistMutation = useMutation({
-    mutationFn: (payload: { taskId: string; title: string }) => deadlineApi.createChecklistItem(payload.taskId, { title: payload.title }),
+    mutationFn: (payload: { taskId: string; sectionId: string; title: string }) => deadlineApi.createChecklistItem(payload.taskId, { sectionId: payload.sectionId, title: payload.title }),
     onSuccess: async (_, payload) => {
       setNewChecklistTitle("");
       setChecklistError(null);
       await refreshDeadlineTask(payload.taskId);
     },
     onError: () => setChecklistError("Could not add checklist item."),
+  });
+
+  const createChecklistSectionMutation = useMutation({
+    mutationFn: (payload: { taskId: string; title: string }) => deadlineApi.createChecklistSection(payload.taskId, { title: payload.title }),
+    onSuccess: async (_, payload) => {
+      setNewSectionTitle("");
+      setChecklistError(null);
+      await refreshDeadlineTask(payload.taskId);
+    },
+    onError: () => setChecklistError("Could not add checklist section."),
+  });
+
+  const updateChecklistMutation = useMutation<unknown, Error, { taskId: string; sectionId?: string; itemId?: string; title: string; kind: "section" | "item" }>({
+    mutationFn: (payload: { taskId: string; sectionId?: string; itemId?: string; title: string; kind: "section" | "item" }) => {
+      if (payload.kind === "section" && payload.sectionId) {
+        return deadlineApi.updateChecklistSection(payload.taskId, payload.sectionId, { title: payload.title });
+      }
+
+      if (payload.kind === "item" && payload.itemId) {
+        return deadlineApi.updateChecklistItem(payload.taskId, payload.itemId, { title: payload.title });
+      }
+
+      throw new Error("Invalid checklist update payload");
+    },
+    onSuccess: async (_, payload) => {
+      setChecklistError(null);
+      setEditingSectionId(null);
+      setEditingSectionTitle("");
+      setEditingItemId(null);
+      setEditingItemTitle("");
+      await refreshDeadlineTask(payload.taskId);
+    },
+    onError: () => setChecklistError("Could not update checklist."),    
   });
 
   const toggleChecklistMutation = useMutation({
@@ -545,13 +716,23 @@ export function DeadlinePage() {
     onError: () => setChecklistError("Could not update checklist item."),
   });
 
-  const deleteChecklistMutation = useMutation({
-    mutationFn: (payload: { taskId: string; itemId: string }) => deadlineApi.removeChecklistItem(payload.taskId, payload.itemId),
+  const deleteChecklistMutation = useMutation<void, Error, { taskId: string; itemId?: string; sectionId?: string; kind: "section" | "item" }>({
+    mutationFn: (payload: { taskId: string; itemId?: string; sectionId?: string; kind: "section" | "item" }) => {
+      if (payload.kind === "section" && payload.sectionId) {
+        return deadlineApi.removeChecklistSection(payload.taskId, payload.sectionId);
+      }
+
+      if (payload.kind === "item" && payload.itemId) {
+        return deadlineApi.removeChecklistItem(payload.taskId, payload.itemId);
+      }
+
+      throw new Error("Invalid checklist delete payload");
+    },
     onSuccess: async (_, payload) => {
       setChecklistError(null);
       await refreshDeadlineTask(payload.taskId);
     },
-    onError: () => setChecklistError("Could not delete checklist item."),
+    onError: () => setChecklistError("Could not delete checklist."),
   });
 
   const addMemberMutation = useMutation({
@@ -587,7 +768,28 @@ export function DeadlinePage() {
     });
   };
 
-  const onCreateChecklistItem = (event: FormEvent) => {
+  const onCreateChecklistSection = (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!selectedTaskId) {
+      setChecklistError("Select a task first.");
+      return;
+    }
+
+    const title = newSectionTitle.trim();
+
+    if (!title) {
+      setChecklistError("Checklist section title is required.");
+      return;
+    }
+
+    createChecklistSectionMutation.mutate({
+      taskId: selectedTaskId,
+      title,
+    });
+  };
+
+  const onCreateChecklistItem = (event: FormEvent, sectionId: string) => {
     event.preventDefault();
 
     if (!selectedTaskId) {
@@ -604,7 +806,52 @@ export function DeadlinePage() {
 
     createChecklistMutation.mutate({
       taskId: selectedTaskId,
+      sectionId,
       title,
+    });
+  };
+
+  const onSaveSection = (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!selectedTaskId || !editingSectionId) {
+      return;
+    }
+
+    const title = editingSectionTitle.trim();
+
+    if (!title) {
+      setChecklistError("Checklist section title is required.");
+      return;
+    }
+
+    updateChecklistMutation.mutate({
+      taskId: selectedTaskId,
+      sectionId: editingSectionId,
+      title,
+      kind: "section",
+    });
+  };
+
+  const onSaveItem = (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!selectedTaskId || !editingItemId) {
+      return;
+    }
+
+    const title = editingItemTitle.trim();
+
+    if (!title) {
+      setChecklistError("Checklist item title is required.");
+      return;
+    }
+
+    updateChecklistMutation.mutate({
+      taskId: selectedTaskId,
+      itemId: editingItemId,
+      title,
+      kind: "item",
     });
   };
 
@@ -689,7 +936,12 @@ export function DeadlinePage() {
                     setSelectedColumnId(column.id);
                     setSelectedTaskId(null);
                     setChecklistError(null);
+                    setNewSectionTitle("");
                     setNewChecklistTitle("");
+                    setEditingSectionId(null);
+                    setEditingSectionTitle("");
+                    setEditingItemId(null);
+                    setEditingItemTitle("");
                     setAddMemberError(null);
                     setMemberToAdd("");
                   }}
@@ -702,18 +954,54 @@ export function DeadlinePage() {
               isLoading={Boolean(selectedTaskId) && !selectedTaskDetail && selectedTaskDetailQuery.isLoading}
               isError={selectedTaskDetailQuery.isError}
               canManage={Boolean(selectedTaskDetail?.viewerCanManage)}
+              canManageSections={Boolean(selectedTaskDetail?.viewerCanManageSections)}
+              canManageItems={Boolean(selectedTaskDetail?.viewerCanManageItems)}
               groupMembers={groupMembersQuery.data ?? []}
               memberToAdd={memberToAdd}
               addMemberError={addMemberError}
               isAddingMember={addMemberMutation.isPending}
+              newSectionTitle={newSectionTitle}
               newChecklistTitle={newChecklistTitle}
+              editingSectionId={editingSectionId}
+              editingSectionTitle={editingSectionTitle}
+              editingItemId={editingItemId}
+              editingItemTitle={editingItemTitle}
               checklistError={checklistError}
+              isCreatingSection={createChecklistSectionMutation.isPending}
               isCreatingChecklist={createChecklistMutation.isPending}
+              isUpdatingChecklist={updateChecklistMutation.isPending}
               isTogglingChecklist={toggleChecklistMutation.isPending}
               isDeletingChecklist={deleteChecklistMutation.isPending}
+              onSectionTitleChange={setNewSectionTitle}
               onChecklistTitleChange={setNewChecklistTitle}
+              onStartEditSection={(section) => {
+                setEditingSectionId(section.id);
+                setEditingSectionTitle(section.title);
+              }}
+              onCancelEditSection={() => {
+                setEditingSectionId(null);
+                setEditingSectionTitle("");
+              }}
+              onEditingSectionTitleChange={setEditingSectionTitle}
+              onSaveSection={onSaveSection}
+              onDeleteSection={(sectionId) => {
+                if (selectedTaskId) {
+                  deleteChecklistMutation.mutate({ taskId: selectedTaskId, sectionId, kind: "section" });
+                }
+              }}
+              onStartEditItem={(item) => {
+                setEditingItemId(item.id);
+                setEditingItemTitle(item.title);
+              }}
+              onCancelEditItem={() => {
+                setEditingItemId(null);
+                setEditingItemTitle("");
+              }}
+              onEditingItemTitleChange={setEditingItemTitle}
+              onSaveItem={onSaveItem}
               onMemberToAddChange={setMemberToAdd}
               onAddMember={onAddMember}
+              onCreateChecklistSection={onCreateChecklistSection}
               onCreateChecklistItem={onCreateChecklistItem}
               onToggleChecklistItem={(itemId) => {
                 if (selectedTaskId) {
@@ -722,7 +1010,7 @@ export function DeadlinePage() {
               }}
               onDeleteChecklistItem={(itemId) => {
                 if (selectedTaskId) {
-                  deleteChecklistMutation.mutate({ taskId: selectedTaskId, itemId });
+                  deleteChecklistMutation.mutate({ taskId: selectedTaskId, itemId, kind: "item" });
                 }
               }}
             />
@@ -733,7 +1021,12 @@ export function DeadlinePage() {
             onSelectTask={(taskId) => {
               setSelectedTaskId(taskId);
               setChecklistError(null);
+              setNewSectionTitle("");
               setNewChecklistTitle("");
+              setEditingSectionId(null);
+              setEditingSectionTitle("");
+              setEditingItemId(null);
+              setEditingItemTitle("");
               setAddMemberError(null);
               setMemberToAdd("");
             }}

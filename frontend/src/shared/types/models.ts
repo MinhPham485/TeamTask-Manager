@@ -87,6 +87,9 @@ export type DeadlineTask = Task & {
   daysOverdue: number;
   viewerCanOpen?: boolean;
   viewerCanManage?: boolean;
+  viewerCanManageSections?: boolean;
+  viewerCanManageItems?: boolean;
+  checklistSections?: DeadlineChecklistSection[];
   checklistSummary?: {
     completed: number;
     total: number;
@@ -129,9 +132,23 @@ export type ChecklistItem = {
   id: string;
   taskId: string;
   deadlineTaskId?: string;
+  sectionId?: string;
   title: string;
   isCompleted: boolean;
   position: number;
+  viewerCanManage?: boolean;
+};
+
+export type DeadlineChecklistSection = {
+  id: string;
+  deadlineTaskId: string;
+  title: string;
+  position: number;
+  createdBy?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  viewerCanManage?: boolean;
+  items: ChecklistItem[];
 };
 
 export type TaskComment = {
