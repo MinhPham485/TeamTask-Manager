@@ -130,6 +130,7 @@ model DeadlineTask {
   group          Group                   @relation(fields: [groupId], references: [id], onDelete: Cascade)
   creator        User?                   @relation("DeadlineTaskCreator", fields: [createdBy], references: [id])
   memberships    DeadlineTaskMember[]
+  checklistSections DeadlineChecklistSection[]
   checklistItems DeadlineChecklistItem[]
 
   @@index([groupId, dueDate])
@@ -155,6 +156,7 @@ model DeadlineTaskMember {
 model DeadlineChecklistItem {
   id             String   @id @default(uuid())
   deadlineTaskId String
+  sectionId      String
   title          String
   isCompleted    Boolean  @default(false)
   position       Int      @default(0)
@@ -163,6 +165,23 @@ model DeadlineChecklistItem {
   updatedAt      DateTime @updatedAt
 
   deadlineTask DeadlineTask @relation(fields: [deadlineTaskId], references: [id], onDelete: Cascade)
+  section      DeadlineChecklistSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([deadlineTaskId, position])
+  @@index([sectionId, position])
+}
+
+model DeadlineChecklistSection {
+  id             String   @id @default(uuid())
+  title          String
+  position       Int      @default(0)
+  deadlineTaskId String
+  createdBy      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  deadlineTask DeadlineTask            @relation(fields: [deadlineTaskId], references: [id], onDelete: Cascade)
+  items        DeadlineChecklistItem[]
 
   @@index([deadlineTaskId, position])
 }

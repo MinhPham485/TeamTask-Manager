@@ -9,9 +9,13 @@ router.get('/group/:groupId', verifyToken, isGroupMember, deadlineTaskController
 router.post('/', verifyToken, canManageGroupTasks, deadlineTaskController.createDeadlineTask);
 router.get('/:id', verifyToken, deadlineTaskController.getDeadlineTask);
 router.post('/:id/members', verifyToken, deadlineTaskController.addDeadlineTaskMember);
-router.post('/:id/checklist', verifyToken, deadlineTaskController.createDeadlineChecklistItem);
-router.patch('/:id/checklist/:itemId/toggle', verifyToken, deadlineTaskController.toggleDeadlineChecklistItem);
-router.delete('/:id/checklist/:itemId', verifyToken, deadlineTaskController.deleteDeadlineChecklistItem);
+router.post('/:id/checklist/sections', verifyToken, deadlineTaskController.createDeadlineChecklistSection);
+router.put('/:id/checklist/sections/:sectionId', verifyToken, deadlineTaskController.updateDeadlineChecklistSection);
+router.delete('/:id/checklist/sections/:sectionId', verifyToken, deadlineTaskController.deleteDeadlineChecklistSection);
+router.post('/:id/checklist/items', verifyToken, deadlineTaskController.createDeadlineChecklistItem);
+router.put('/:id/checklist/items/:itemId', verifyToken, deadlineTaskController.updateDeadlineChecklistItem);
+router.patch('/:id/checklist/items/:itemId/toggle', verifyToken, deadlineTaskController.toggleDeadlineChecklistItem);
+router.delete('/:id/checklist/items/:itemId', verifyToken, deadlineTaskController.deleteDeadlineChecklistItem);
 router.delete('/:id', verifyToken, deadlineTaskController.deleteDeadlineTask);
 
 module.exports = router;
