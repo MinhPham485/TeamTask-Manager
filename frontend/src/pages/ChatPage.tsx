@@ -90,14 +90,15 @@ export function ChatPage() {
   const currentUser = authStore((state) => state.user);
   const token = authStore((state) => state.token);
 
-  const [groupMessages, setGroupMessages] = useState<Message[]>([]);
-  const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
-  const [directThreads, setDirectThreads] = useState<DirectThread[]>([]);
+  const [groupMessageAppends, setGroupMessageAppends] = useState<Record<string, Message[]>>({});
+  const [deletedGroupMessageIds, setDeletedGroupMessageIds] = useState<Record<string, string[]>>({});
+  const [directMessageAppends, setDirectMessageAppends] = useState<Record<string, DirectMessage[]>>({});
+  const [directThreadOverrides, setDirectThreadOverrides] = useState<Record<string, DirectThread>>({});
   const [draft, setDraft] = useState("");
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [attachmentUploading, setAttachmentUploading] = useState(false);
-  const [socketStatus, setSocketStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected");
+  const [socketStatus, setSocketStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
   const [error, setError] = useState<string | null>(null);
   const [conversationFilter, setConversationFilter] = useState("");
   const [chatMode, setChatMode] = useState<"group" | "direct">("group");
@@ -135,20 +136,30 @@ export function ChatPage() {
     queryFn: () => messageApi.getDirectThreads(),
   });
 
+  const directThreads = useMemo(() => {
+    const mergedThreads = [...(directThreadsQuery.data ?? [])];
+
+    Object.values(directThreadOverrides).forEach((thread) => {
+      const index = mergedThreads.findIndex((item) => item.id === thread.id);
+
+      if (index >= 0) {
+        mergedThreads[index] = thread;
+        return;
+      }
+
+      mergedThreads.unshift(thread);
+    });
+
+    return mergedThreads;
+  }, [directThreadOverrides, directThreadsQuery.data]);
+
   const createDirectThreadMutation = useMutation({
     mutationFn: (peerUserId: string) => messageApi.createOrGetDirectThread(peerUserId),
     onSuccess: (thread) => {
-      setDirectThreads((prev) => {
-        const index = prev.findIndex((item) => item.id === thread.id);
-
-        if (index >= 0) {
-          const next = [...prev];
-          next[index] = thread;
-          return next;
-        }
-
-        return [thread, ...prev];
-      });
+      setDirectThreadOverrides((prev) => ({
+        ...prev,
+        [thread.id]: thread,
+      }));
     },
   });
 
@@ -166,30 +177,22 @@ export function ChatPage() {
     currentGroupRef.current = currentGroupId;
   }, [currentGroupId]);
 
-  useEffect(() => {
-    setGroupMessages(messagesQuery.data ?? []);
-  }, [messagesQuery.data, currentGroupId]);
-
-  useEffect(() => {
-    setDirectThreads(directThreadsQuery.data ?? []);
-  }, [directThreadsQuery.data]);
-
-  useEffect(() => {
-    setDirectUserId(null);
-  }, [currentGroupId]);
-
-  useEffect(() => {
-    setAttachmentFile(null);
-    setAttachmentError(null);
-  }, [chatMode, currentGroupId]);
-
-  useEffect(() => {
-    if (!messageListRef.current) {
-      return;
+  const groupMessages = useMemo(() => {
+    if (!currentGroupId) {
+      return [];
     }
 
-    messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
-  }, [chatMode, groupMessages, directMessages]);
+    const removedIds = new Set(deletedGroupMessageIds[currentGroupId] ?? []);
+    const mergedMessages = (messagesQuery.data ?? []).filter((message) => !removedIds.has(message.id));
+
+    (groupMessageAppends[currentGroupId] ?? []).forEach((message) => {
+      if (!removedIds.has(message.id) && !mergedMessages.some((item) => item.id === message.id)) {
+        mergedMessages.push(message);
+      }
+    });
+
+    return mergedMessages;
+  }, [currentGroupId, deletedGroupMessageIds, groupMessageAppends, messagesQuery.data]);
 
   useEffect(() => {
     const joinGroup = (groupId: string) => {
@@ -230,21 +233,29 @@ export function ChatPage() {
         return;
       }
 
-      setGroupMessages((prev) => {
-        if (prev.some((item) => item.id === message.id)) {
+      setGroupMessageAppends((prev) => {
+        const currentMessages = prev[message.groupId] ?? [];
+
+        if (currentMessages.some((item) => item.id === message.id)) {
           return prev;
         }
 
-        return [...prev, message];
+        return {
+          ...prev,
+          [message.groupId]: [...currentMessages, message],
+        };
       });
     };
 
     const handleDeletedMessage = (payload: { id?: string }) => {
-      if (!payload?.id) {
+      if (!payload?.id || !currentGroupRef.current) {
         return;
       }
 
-      setGroupMessages((prev) => prev.filter((message) => message.id !== payload.id));
+      setDeletedGroupMessageIds((prev) => ({
+        ...prev,
+        [currentGroupRef.current as string]: [...(prev[currentGroupRef.current as string] ?? []), payload.id as string],
+      }));
     };
 
     const handleNewDirectMessage = (message: DirectMessage) => {
@@ -252,21 +263,34 @@ export function ChatPage() {
         return;
       }
 
-      setDirectMessages((prev) => {
-        if (prev.some((item) => item.id === message.id)) {
+      setDirectMessageAppends((prev) => {
+        const currentMessages = prev[message.threadId] ?? [];
+
+        if (currentMessages.some((item) => item.id === message.id)) {
           return prev;
         }
 
-        return [...prev, message];
+        return {
+          ...prev,
+          [message.threadId]: [...currentMessages, message],
+        };
       });
 
-      setDirectThreads((prev) =>
-        prev.map((thread) => (thread.id === message.threadId ? { ...thread, updatedAt: message.createdAt, messages: [message] } : thread))
-      );
+      setDirectThreadOverrides((prev) => {
+        const existingThread = prev[message.threadId] ?? directThreads.find((thread) => thread.id === message.threadId);
+
+        if (!existingThread) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [message.threadId]: { ...existingThread, updatedAt: message.createdAt, messages: [message] },
+        };
+      });
     };
 
     reconnectSocketAuthToken();
-    setSocketStatus("connecting");
     socket.connect();
 
     socket.on("connect", handleConnect);
@@ -285,7 +309,7 @@ export function ChatPage() {
       socket.off("chat:direct-message:new", handleNewDirectMessage);
       disconnectSocketClient();
     };
-  }, [socket]);
+  }, [directThreads, socket]);
 
   useEffect(() => {
     reconnectSocketAuthToken();
@@ -315,7 +339,7 @@ export function ChatPage() {
     });
   }, [currentGroupId, socket]);
 
-  const activeDirectThread = useMemo(() => {
+  const activeDirectThread = (() => {
     if (!directUserId || !currentUser?.id) {
       return null;
     }
@@ -329,7 +353,7 @@ export function ChatPage() {
         return isParticipant;
       }) ?? null
     );
-  }, [currentUser?.id, directThreads, directUserId]);
+  })();
 
   const directMessagesQuery = useQuery({
     queryKey: activeDirectThread ? ["messages", "direct", activeDirectThread.id] : ["messages", "direct", "missing"],
@@ -337,18 +361,29 @@ export function ChatPage() {
     enabled: Boolean(activeDirectThread?.id),
   });
 
+  const directMessages = useMemo(() => {
+    if (chatMode !== "direct" || !activeDirectThread?.id) {
+      return [];
+    }
+
+    const mergedMessages = [...(directMessagesQuery.data ?? [])];
+
+    (directMessageAppends[activeDirectThread.id] ?? []).forEach((message) => {
+      if (!mergedMessages.some((item) => item.id === message.id)) {
+        mergedMessages.push(message);
+      }
+    });
+
+    return mergedMessages;
+  }, [activeDirectThread?.id, chatMode, directMessageAppends, directMessagesQuery.data]);
+
   useEffect(() => {
-    if (chatMode !== "direct") {
+    if (!messageListRef.current) {
       return;
     }
 
-    if (!activeDirectThread?.id) {
-      setDirectMessages([]);
-      return;
-    }
-
-    setDirectMessages(directMessagesQuery.data ?? []);
-  }, [activeDirectThread?.id, chatMode, directMessagesQuery.data]);
+    messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+  }, [chatMode, groupMessages, directMessages]);
 
   useEffect(() => {
     if (!socket.connected) {
@@ -419,21 +454,33 @@ export function ChatPage() {
           }
 
           if (response.message) {
-            setDirectMessages((prev) => {
-              if (prev.some((item) => item.id === response.message?.id)) {
+            setDirectMessageAppends((prev) => {
+              const sentMessage = response.message as DirectMessage;
+              const currentMessages = prev[sentMessage.threadId] ?? [];
+
+              if (currentMessages.some((item) => item.id === sentMessage.id)) {
                 return prev;
               }
 
-              return [...prev, response.message as DirectMessage];
+              return {
+                ...prev,
+                [sentMessage.threadId]: [...currentMessages, sentMessage],
+              };
             });
 
-            setDirectThreads((prev) =>
-              prev.map((thread) =>
-                thread.id === response.message?.threadId
-                  ? { ...thread, updatedAt: response.message.createdAt, messages: [response.message as DirectMessage] }
-                  : thread
-              )
-            );
+            setDirectThreadOverrides((prev) => {
+              const sentMessage = response.message as DirectMessage;
+              const existingThread = prev[sentMessage.threadId] ?? directThreads.find((thread) => thread.id === sentMessage.threadId);
+
+              if (!existingThread) {
+                return prev;
+              }
+
+              return {
+                ...prev,
+                [sentMessage.threadId]: { ...existingThread, updatedAt: sentMessage.createdAt, messages: [sentMessage] },
+              };
+            });
           }
 
           setDraft("");
@@ -516,25 +563,30 @@ export function ChatPage() {
         key: presign.key,
       });
 
-      setGroupMessages((prev) => {
-        if (prev.some((item) => item.id === response.id)) {
+      setGroupMessageAppends((prev) => {
+        if (!currentGroupId) {
           return prev;
         }
 
-        return [...prev, response];
+        const currentMessages = prev[currentGroupId] ?? [];
+
+        if (currentMessages.some((item) => item.id === response.id)) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [currentGroupId]: [...currentMessages, response],
+        };
       });
 
       setDraft("");
       setAttachmentFile(null);
-    } catch (uploadError) {
+    } catch {
       setAttachmentError("Could not upload attachment.");
     } finally {
       setAttachmentUploading(false);
     }
-  };
-
-  const getGroupInitial = (name: string) => {
-    return name.trim().charAt(0).toUpperCase() || "#";
   };
 
   const getSenderName = (message: { senderId: string; sender?: { username?: string } }) => {
@@ -543,20 +595,6 @@ export function ChatPage() {
     }
 
     return message.sender?.username ?? "Unknown";
-  };
-
-  const getDirectThreadByPeer = (peerUserId: string) => {
-    if (!currentUser?.id) {
-      return null;
-    }
-
-    return (
-      directThreads.find(
-        (thread) =>
-          (thread.userAId === currentUser.id && thread.userBId === peerUserId) ||
-          (thread.userBId === currentUser.id && thread.userAId === peerUserId)
-      ) ?? null
-    );
   };
 
   const directContacts = useMemo(() => {
@@ -619,7 +657,14 @@ export function ChatPage() {
     }));
 
     const directTargets: ConversationTarget[] = directContacts.map((member) => {
-      const thread = getDirectThreadByPeer(member.userId);
+      const thread =
+        currentUser?.id
+          ? directThreads.find(
+              (item) =>
+                (item.userAId === currentUser.id && item.userBId === member.userId) ||
+                (item.userBId === currentUser.id && item.userAId === member.userId)
+            ) ?? null
+          : null;
       const lastMessage = thread?.messages?.[0];
       const lastSender = lastMessage?.senderId === currentUser?.id ? "You" : lastMessage?.sender?.username;
 
@@ -644,7 +689,7 @@ export function ChatPage() {
     return mergedTargets.filter((target) => {
       return target.title.toLowerCase().includes(normalizedFilter) || target.subtitle.toLowerCase().includes(normalizedFilter);
     });
-  }, [conversationFilter, currentUser?.id, directContacts, directThreads, groups]);
+  }, [conversationFilter, currentUser, directContacts, directThreads, groups]);
 
   const activeConversationId = chatMode === "direct" && directUserId ? `direct:${directUserId}` : currentGroupId ? `group:${currentGroupId}` : null;
 
@@ -688,12 +733,16 @@ export function ChatPage() {
                   className={isActive ? "messenger-room active" : "messenger-room"}
                   onClick={() => {
                     if (conversation.type === "group") {
+                      setAttachmentFile(null);
+                      setAttachmentError(null);
                       setChatMode("group");
                       setDirectUserId(null);
                       setCurrentGroup(conversation.groupId);
                       return;
                     }
 
+                    setAttachmentFile(null);
+                    setAttachmentError(null);
                     setChatMode("direct");
                     setDirectUserId(conversation.peerUserId);
 

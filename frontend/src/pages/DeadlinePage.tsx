@@ -552,7 +552,7 @@ export function DeadlinePage() {
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [createTitle, setCreateTitle] = useState("");
-  const [createDueDate, setCreateDueDate] = useState("");
+  const [createDueDateOverride, setCreateDueDateOverride] = useState<string | null>(null);
   const [createPriority, setCreatePriority] = useState<Task["priority"]>("Medium");
   const [createError, setCreateError] = useState<string | null>(null);
   const [newSectionTitle, setNewSectionTitle] = useState("");
@@ -612,19 +612,9 @@ export function DeadlinePage() {
   const currentMembership = groupsQuery.data?.find((membership) => membership.group.id === currentGroupId) ?? null;
   const canCreateTasks = currentMembership?.role === "owner" || currentMembership?.role === "manager";
 
-  useEffect(() => {
-    if (!selectedColumn) {
-      setCreateDueDate("");
-      return;
-    }
-
-    if (selectedColumn.dateKey) {
-      setCreateDueDate(selectedColumn.dateKey);
-      return;
-    }
-
-    setCreateDueDate(selectedColumn.kind === "noDue" ? "" : toLocalDateKey(new Date()));
-  }, [selectedColumn]);
+  const createDueDate =
+    createDueDateOverride ??
+    (selectedColumn ? (selectedColumn.dateKey ?? (selectedColumn.kind === "noDue" ? "" : toLocalDateKey(new Date()))) : "");
 
   const refreshDeadlineData = async () => {
     if (!currentGroupId) {
@@ -650,6 +640,7 @@ export function DeadlinePage() {
     onSuccess: async () => {
       setCreateTitle("");
       setCreateError(null);
+      setCreateDueDateOverride(null);
       await refreshDeadlineData();
     },
     onError: () => setCreateError("Could not create task."),
@@ -884,6 +875,7 @@ export function DeadlinePage() {
           onChange={(event) => {
             setSelectedColumnId(null);
             setSelectedTaskId(null);
+            setCreateDueDateOverride(null);
             setCurrentGroup(event.target.value || null);
           }}
         >
@@ -935,6 +927,7 @@ export function DeadlinePage() {
                   onSelectColumn={() => {
                     setSelectedColumnId(column.id);
                     setSelectedTaskId(null);
+                    setCreateDueDateOverride(null);
                     setChecklistError(null);
                     setNewSectionTitle("");
                     setNewChecklistTitle("");
@@ -1039,7 +1032,7 @@ export function DeadlinePage() {
             isDeletingTask={deleteTaskMutation.isPending}
             userId={user?.id}
             onCreateTitleChange={setCreateTitle}
-            onCreateDueDateChange={setCreateDueDate}
+            onCreateDueDateChange={setCreateDueDateOverride}
             onCreatePriorityChange={setCreatePriority}
             onCreateTask={onCreateTask}
             onDeleteTask={deleteTaskMutation.mutate}
