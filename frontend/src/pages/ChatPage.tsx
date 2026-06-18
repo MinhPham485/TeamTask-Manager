@@ -361,7 +361,7 @@ export function ChatPage() {
     enabled: Boolean(activeDirectThread?.id),
   });
 
-  const directMessages = useMemo(() => {
+  const directMessages = (() => {
     if (chatMode !== "direct" || !activeDirectThread?.id) {
       return [];
     }
@@ -375,7 +375,7 @@ export function ChatPage() {
     });
 
     return mergedMessages;
-  }, [activeDirectThread?.id, chatMode, directMessageAppends, directMessagesQuery.data]);
+  })();
 
   useEffect(() => {
     if (!messageListRef.current) {
