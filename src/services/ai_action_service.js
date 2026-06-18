@@ -95,9 +95,9 @@ const parseCreateGroupIntent = (question) => {
     }
 
     const name = extractByRegex(question, [
-        /(?:ten|tên|named|name)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu,
-        /(?:tao|tạo|create|them|thêm|add)\s+(?:giup\s+toi\s+|giúp\s+tôi\s+)?(?:mot\s+|một\s+)?(?:nhom|nhóm|group)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu,
-        /(?:nhom|nhóm|group)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu
+        /(?:ten|tên|named|name)\s*[:-]?\s*["']?([^"'\n\r]+)["']?$/iu,
+        /(?:tao|tạo|create|them|thêm|add)\s+(?:giup\s+toi\s+|giúp\s+tôi\s+)?(?:mot\s+|một\s+)?(?:nhom|nhóm|group)\s*[:-]?\s*["']?([^"'\n\r]+)["']?$/iu,
+        /(?:nhom|nhóm|group)\s*[:-]?\s*["']?([^"'\n\r]+)["']?$/iu
     ]) || extractNameAfterMarker(question, [
         'ten ',
         'named ',
@@ -127,9 +127,9 @@ const parseCreateListIntent = (question) => {
     }
 
     const name = extractByRegex(question, [
-        /(?:ten|tên|named|name)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu,
-        /(?:tao|tạo|create|them|thêm|add)\s+(?:mot\s+|một\s+)?(?:list|cot|cột|column)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu,
-        /(?:list|cot|cột|column)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu
+        /(?:ten|tên|named|name)\s*[:-]?\s*["']?([^"'\n\r]+)["']?$/iu,
+        /(?:tao|tạo|create|them|thêm|add)\s+(?:mot\s+|một\s+)?(?:list|cot|cột|column)\s*[:-]?\s*["']?([^"'\n\r]+)["']?$/iu,
+        /(?:list|cot|cột|column)\s*[:-]?\s*["']?([^"'\n\r]+)["']?$/iu
     ]) || extractNameAfterMarker(question, [
         'ten ',
         'named ',
@@ -159,9 +159,9 @@ const parseCreateTaskIntent = (question) => {
     }
 
     const title = extractByRegex(question, [
-        /(?:ten|tên|title|named|name)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu,
-        /(?:tao|tạo|create|them|thêm|add)\s+(?:mot\s+|một\s+)?(?:task|cong\s+viec|công\s+việc)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu,
-        /(?:task|cong\s+viec|công\s+việc)\s*[:\-]?\s*["']?([^"'\n\r]+)["']?$/iu
+        /(?:ten|tên|title|named|name)\s*[:-]?\s*["']?([^"'\n\r]+)["']?$/iu,
+        /(?:tao|tạo|create|them|thêm|add)\s+(?:mot\s+|một\s+)?(?:task|cong\s+viec|công\s+việc)\s*[:-]?\s*["']?([^"'\n\r]+)["']?$/iu,
+        /(?:task|cong\s+viec|công\s+việc)\s*[:-]?\s*["']?([^"'\n\r]+)["']?$/iu
     ]) || extractNameAfterMarker(question, [
         'ten ',
         'title ',

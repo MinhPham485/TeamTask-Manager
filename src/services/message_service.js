@@ -204,17 +204,17 @@ const createDirectMessage = async ({prisma, userId, threadId, recipientId, conte
         return {error: `Content exceeds ${MAX_MESSAGE_LENGTH} characters`, status: 400};
     }
 
-    let resolvedThread = null;
-
-    if (threadId) {
+    const resolvedThread = await (async () => {
+        if (threadId) {
         const access = await ensureDirectThreadAccess(prisma, userId, threadId);
 
         if (access.error) {
             return access;
         }
 
-        resolvedThread = access.thread;
-    } else {
+            return access.thread;
+        }
+
         const threadResult = await getOrCreateDirectThread({
             prisma,
             userId,
@@ -225,7 +225,11 @@ const createDirectMessage = async ({prisma, userId, threadId, recipientId, conte
             return threadResult;
         }
 
-        resolvedThread = threadResult.thread;
+        return threadResult.thread;
+    })();
+
+    if (resolvedThread.error) {
+        return resolvedThread;
     }
 
     const message = await prisma.directMessage.create({

@@ -644,22 +644,18 @@ exports.createDeadlineChecklistItem = async (req, res) => {
         let item = null;
 
         await prisma.$transaction(async (transaction) => {
-            let targetSection = null;
-
-            if (sectionId) {
-                targetSection = await transaction.deadlineChecklistSection.findUnique({
+            const targetSection = sectionId
+                ? await transaction.deadlineChecklistSection.findUnique({
                     where: {id: sectionId},
                     select: {
                         id: true,
                         deadlineTaskId: true
                     }
-                });
+                })
+                : await getOrCreateDefaultDeadlineSection(transaction, id, req.user.userId);
 
-                if (!targetSection || targetSection.deadlineTaskId !== id) {
-                    throw new Error('Checklist section not found');
-                }
-            } else {
-                targetSection = await getOrCreateDefaultDeadlineSection(transaction, id, req.user.userId);
+            if (!targetSection || targetSection.deadlineTaskId !== id) {
+                throw new Error('Checklist section not found');
             }
 
             const lastItem = await transaction.deadlineChecklistItem.findFirst({
