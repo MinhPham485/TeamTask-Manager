@@ -114,7 +114,8 @@ exports.askAssistant = async (req, res) => {
         }
 
         return res.status(result.status || 200).json(result.data);
-    } catch (error) {
+    } catch (error){
+        console.error(error);
         return res.status(500).json({
             error: {
                 code: 'AI_INTERNAL_ERROR',
@@ -138,11 +139,12 @@ exports.askGroupAssistant = async (req, res) => {
 
         return res.status(result.status || 200).json(result.data);
     } catch (error) {
-        return res.status(500).json({
-            error: {
-                code: 'AI_INTERNAL_ERROR',
-                message: 'Unable to process AI request'
-            }
-        });
-    }
-};
+    console.error(error);
+    return res.status(500).json({
+        error: {
+            code: 'AI_INTERNAL_ERROR',
+            message: 'Unable to process AI request'
+        }
+    });
+}
+}

@@ -333,6 +333,7 @@ exports.updateProfile = async (req, res) => {
         res.json(user);
     }
     catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Failed to update profile' });
     }
 }
@@ -367,6 +368,7 @@ exports.changePassword = async (req, res) => {
         res.json({ message: 'Password changed successfully' });
     }
     catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Failed to change password' });
     }
 }
@@ -405,6 +407,7 @@ exports.createAvatarUploadUrl = async (req, res) => {
             expiresInSeconds,
         });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Failed to create avatar upload URL' });
     }
 };
@@ -433,6 +436,7 @@ exports.updateAvatar = async (req, res) => {
 
         res.json(user);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Failed to update avatar' });
     }
 };

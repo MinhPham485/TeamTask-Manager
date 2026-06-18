@@ -26,6 +26,7 @@ const attachTaskAccess = async (req, res, next, requiredAccess, forbiddenMessage
         req.groupMembership = taskResult.groupMembership;
         next();
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Authorization check failed' });
     }
 };
@@ -84,6 +85,7 @@ const isGroupMember = async (req, res, next) => {
         req.groupMembership = membership;
         next();
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Authorization check failed' });
     }
 };
@@ -112,6 +114,7 @@ const canManageGroupTasks = async (req, res, next) => {
         req.groupMembership = membership;
         next();
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Authorization check failed' });
     }
 };
@@ -134,6 +137,7 @@ const isGroupOwner = async (req, res, next) => {
 
         next();
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Authorization check failed' });
     }
 };
