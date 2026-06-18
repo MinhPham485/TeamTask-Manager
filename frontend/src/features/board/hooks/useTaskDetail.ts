@@ -283,7 +283,7 @@ export function useTaskDetail({ currentGroupId, localTasks, setLocalTasks, selec
 
       setAttachmentFile(null);
       await queryClient.invalidateQueries({ queryKey: queryKeys.attachments.byTask(selectedTask.id) });
-    } catch (uploadError) {
+    } catch {
       setAttachmentError("Could not upload attachment.");
     } finally {
       setAttachmentUploading(false);

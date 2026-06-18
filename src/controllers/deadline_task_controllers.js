@@ -27,6 +27,20 @@ const deadlineTaskInclude = {
             createdAt: 'asc'
         }
     },
+    checklistSections: {
+        orderBy: [
+            {position: 'asc'},
+            {createdAt: 'asc'}
+        ],
+        include: {
+            items: {
+                orderBy: [
+                    {position: 'asc'},
+                    {createdAt: 'asc'}
+                ]
+            }
+        }
+    },
     checklistItems: {
         orderBy: [
             {position: 'asc'},
@@ -74,7 +88,9 @@ const normalizeDueDate = (value) => {
 };
 
 const toDeadlineTaskResponse = (task, viewerAccess = {}) => {
-    const {memberships, checklistItems, ...rest} = task;
+    const {memberships, checklistItems, checklistSections, ...rest} = task;
+    const sectionAccess = Boolean(viewerAccess.canManageSections);
+    const itemAccess = Boolean(viewerAccess.canManageItems);
 
     return {
         ...rest,
@@ -83,7 +99,17 @@ const toDeadlineTaskResponse = (task, viewerAccess = {}) => {
         assignee: null,
         viewerCanOpen: Boolean(viewerAccess.canView),
         viewerCanManage: Boolean(viewerAccess.canManage),
+        viewerCanManageSections: sectionAccess,
+        viewerCanManageItems: itemAccess,
         checklistItems: checklistItems ?? [],
+        checklistSections: (checklistSections ?? []).map((section) => ({
+            ...section,
+            viewerCanManage: sectionAccess,
+            items: (section.items ?? []).map((item) => ({
+                ...item,
+                viewerCanManage: itemAccess
+            }))
+        })),
         taskMemberships: (memberships ?? []).map((membership) => ({
             id: membership.id,
             taskId: task.id,
@@ -103,7 +129,9 @@ const getViewerAccessForTask = ({task, userId, membership}) => {
 
     return {
         canView: admin || Boolean(taskMembership),
-        canManage: admin || leader
+        canManage: admin || leader,
+        canManageSections: admin || leader,
+        canManageItems: admin || Boolean(taskMembership)
     };
 };
 
@@ -120,6 +148,7 @@ const toDeadlineTaskListResponse = ({task, userId, membership}) => {
         description: null,
         creator: null,
         checklistItems: [],
+        checklistSections: [],
         taskMemberships: [],
         checklistSummary: {
             completed: 0,
@@ -145,6 +174,76 @@ const normalizeChecklistPositions = async (transaction, deadlineTaskId) => {
         where: {id: item.id},
         data: {position: index}
     })));
+};
+
+const normalizeSectionPositions = async (transaction, deadlineTaskId) => {
+    const sections = await transaction.deadlineChecklistSection.findMany({
+        where: {deadlineTaskId},
+        orderBy: [
+            {position: 'asc'},
+            {createdAt: 'asc'}
+        ],
+        select: {
+            id: true
+        }
+    });
+
+    await Promise.all(sections.map((section, index) => transaction.deadlineChecklistSection.update({
+        where: {id: section.id},
+        data: {position: index}
+    })));
+};
+
+const normalizeSectionItemPositions = async (transaction, sectionId) => {
+    const items = await transaction.deadlineChecklistItem.findMany({
+        where: {sectionId},
+        orderBy: [
+            {position: 'asc'},
+            {createdAt: 'asc'}
+        ],
+        select: {
+            id: true
+        }
+    });
+
+    await Promise.all(items.map((item, index) => transaction.deadlineChecklistItem.update({
+        where: {id: item.id},
+        data: {position: index}
+    })));
+};
+
+const getOrCreateDefaultDeadlineSection = async (transaction, deadlineTaskId, userId) => {
+    const existingSection = await transaction.deadlineChecklistSection.findFirst({
+        where: {deadlineTaskId},
+        orderBy: [
+            {position: 'asc'},
+            {createdAt: 'asc'}
+        ]
+    });
+
+    if (existingSection) {
+        return existingSection;
+    }
+
+    return transaction.deadlineChecklistSection.create({
+        data: {
+            deadlineTaskId,
+            title: 'General',
+            position: 0,
+            createdBy: userId
+        }
+    });
+};
+
+const getDeadlineSection = async (sectionId) => {
+    return prisma.deadlineChecklistSection.findUnique({
+        where: {id: sectionId},
+        select: {
+            id: true,
+            deadlineTaskId: true,
+            position: true
+        }
+    });
 };
 
 const buildDeadlineTaskWhere = ({groupId}) => {
@@ -185,8 +284,53 @@ const getDeadlineTaskAccess = async (taskId, userId) => {
         membership,
         access: {
             canView: admin || Boolean(taskMembership),
-            canManage: admin || leader
+            canManage: admin || leader,
+            canManageSections: admin || leader,
+            canManageItems: admin || Boolean(taskMembership)
         }
+    };
+};
+
+const getDeadlineSectionAccess = async (deadlineTaskId, sectionId, userId) => {
+    const accessResult = await getDeadlineTaskAccess(deadlineTaskId, userId);
+
+    if (accessResult.error) {
+        return accessResult;
+    }
+
+    const section = await getDeadlineSection(sectionId);
+
+    if (!section || section.deadlineTaskId !== deadlineTaskId) {
+        return {error: {status: 404, message: 'Checklist section not found'}};
+    }
+
+    return {
+        section,
+        access: accessResult.access
+    };
+};
+
+const getDeadlineItemWithAccess = async (deadlineTaskId, itemId, userId) => {
+    const accessResult = await getDeadlineTaskAccess(deadlineTaskId, userId);
+
+    if (accessResult.error) {
+        return accessResult;
+    }
+
+    const item = await prisma.deadlineChecklistItem.findFirst({
+        where: {
+            id: itemId,
+            deadlineTaskId
+        }
+    });
+
+    if (!item) {
+        return {error: {status: 404, message: 'Checklist item not found'}};
+    }
+
+    return {
+        item,
+        access: accessResult.access
     };
 };
 
@@ -360,7 +504,7 @@ exports.getDeadlineTask = async (req, res) => {
     }
 };
 
-exports.createDeadlineChecklistItem = async (req, res) => {
+exports.createDeadlineChecklistSection = async (req, res) => {
     try {
         const {id} = req.params;
         const {title} = req.body || {};
@@ -370,32 +514,174 @@ exports.createDeadlineChecklistItem = async (req, res) => {
             return res.status(accessResult.error.status).json({error: accessResult.error.message});
         }
 
-        if (!accessResult.access.canView) {
-            return res.status(403).json({error: 'You do not have permission to edit this deadline task'});
+        if (!accessResult.access.canManageSections) {
+            return res.status(403).json({error: 'Only deadline task leaders can manage checklist sections'});
+        }
+
+        if (!title?.trim()) {
+            return res.status(400).json({error: 'Checklist section title is required'});
+        }
+
+        const lastSection = await prisma.deadlineChecklistSection.findFirst({
+            where: {deadlineTaskId: id},
+            orderBy: {position: 'desc'},
+            select: {position: true}
+        });
+
+        const section = await prisma.deadlineChecklistSection.create({
+            data: {
+                deadlineTaskId: id,
+                title: title.trim(),
+                position: (lastSection?.position ?? -1) + 1,
+                createdBy: req.user.userId
+            },
+            include: {
+                items: {
+                    orderBy: [
+                        {position: 'asc'},
+                        {createdAt: 'asc'}
+                    ]
+                }
+            }
+        });
+
+        res.status(201).json({
+            ...section,
+            viewerCanManage: true
+        });
+    } catch (error) {
+        res.status(500).json({error: error.message});
+    }
+};
+
+exports.updateDeadlineChecklistSection = async (req, res) => {
+    try {
+        const {id, sectionId} = req.params;
+        const {title} = req.body || {};
+        const sectionResult = await getDeadlineSectionAccess(id, sectionId, req.user.userId);
+
+        if (sectionResult.error) {
+            return res.status(sectionResult.error.status).json({error: sectionResult.error.message});
+        }
+
+        if (!sectionResult.access.canManageSections) {
+            return res.status(403).json({error: 'Only deadline task leaders can manage checklist sections'});
+        }
+
+        if (!title?.trim()) {
+            return res.status(400).json({error: 'Checklist section title is required'});
+        }
+
+        const updated = await prisma.deadlineChecklistSection.update({
+            where: {id: sectionId},
+            data: {
+                title: title.trim()
+            },
+            include: {
+                items: {
+                    orderBy: [
+                        {position: 'asc'},
+                        {createdAt: 'asc'}
+                    ]
+                }
+            }
+        });
+
+        res.json({
+            ...updated,
+            viewerCanManage: true
+        });
+    } catch (error) {
+        res.status(500).json({error: error.message});
+    }
+};
+
+exports.deleteDeadlineChecklistSection = async (req, res) => {
+    try {
+        const {id, sectionId} = req.params;
+        const sectionResult = await getDeadlineSectionAccess(id, sectionId, req.user.userId);
+
+        if (sectionResult.error) {
+            return res.status(sectionResult.error.status).json({error: sectionResult.error.message});
+        }
+
+        if (!sectionResult.access.canManageSections) {
+            return res.status(403).json({error: 'Only deadline task leaders can manage checklist sections'});
+        }
+
+        await prisma.$transaction(async (transaction) => {
+            await transaction.deadlineChecklistSection.delete({
+                where: {id: sectionId}
+            });
+
+            await normalizeSectionPositions(transaction, id);
+        });
+
+        res.json({message: 'Checklist section deleted successfully'});
+    } catch (error) {
+        res.status(500).json({error: error.message});
+    }
+};
+
+exports.createDeadlineChecklistItem = async (req, res) => {
+    try {
+        const {id} = req.params;
+        const {title, sectionId} = req.body || {};
+        const accessResult = await getDeadlineTaskAccess(id, req.user.userId);
+
+        if (accessResult.error) {
+            return res.status(accessResult.error.status).json({error: accessResult.error.message});
+        }
+
+        if (!accessResult.access.canManageItems) {
+            return res.status(403).json({error: 'Only deadline task members can edit checklist items'});
         }
 
         if (!title?.trim()) {
             return res.status(400).json({error: 'Checklist item title is required'});
         }
 
-        const lastItem = await prisma.deadlineChecklistItem.findFirst({
-            where: {deadlineTaskId: id},
-            orderBy: {position: 'desc'},
-            select: {position: true}
-        });
+        let item = null;
 
-        const item = await prisma.deadlineChecklistItem.create({
-            data: {
-                deadlineTaskId: id,
-                title: title.trim(),
-                position: (lastItem?.position ?? -1) + 1,
-                createdBy: req.user.userId
+        await prisma.$transaction(async (transaction) => {
+            const targetSection = sectionId
+                ? await transaction.deadlineChecklistSection.findUnique({
+                    where: {id: sectionId},
+                    select: {
+                        id: true,
+                        deadlineTaskId: true
+                    }
+                })
+                : await getOrCreateDefaultDeadlineSection(transaction, id, req.user.userId);
+
+            if (!targetSection || targetSection.deadlineTaskId !== id) {
+                throw new Error('Checklist section not found');
             }
+
+            const lastItem = await transaction.deadlineChecklistItem.findFirst({
+                where: {sectionId: targetSection.id},
+                orderBy: {position: 'desc'},
+                select: {position: true}
+            });
+
+            item = await transaction.deadlineChecklistItem.create({
+                data: {
+                    deadlineTaskId: id,
+                    sectionId: targetSection.id,
+                    title: title.trim(),
+                    position: (lastItem?.position ?? -1) + 1,
+                    createdBy: req.user.userId
+                }
+            });
         });
 
-        res.status(201).json(item);
+        res.status(201).json({
+            ...item,
+            viewerCanManage: true
+        });
     } catch (error) {
-        res.status(500).json({error: error.message});
+        const status = error.message === 'Checklist section not found' ? 404 : 500;
+        res.status(status).json({error: error.message});
     }
 };
 
@@ -455,35 +741,61 @@ exports.addDeadlineTaskMember = async (req, res) => {
 exports.toggleDeadlineChecklistItem = async (req, res) => {
     try {
         const {id, itemId} = req.params;
-        const accessResult = await getDeadlineTaskAccess(id, req.user.userId);
+        const itemResult = await getDeadlineItemWithAccess(id, itemId, req.user.userId);
 
-        if (accessResult.error) {
-            return res.status(accessResult.error.status).json({error: accessResult.error.message});
+        if (itemResult.error) {
+            return res.status(itemResult.error.status).json({error: itemResult.error.message});
         }
 
-        if (!accessResult.access.canView) {
-            return res.status(403).json({error: 'You do not have permission to edit this deadline task'});
-        }
-
-        const item = await prisma.deadlineChecklistItem.findFirst({
-            where: {
-                id: itemId,
-                deadlineTaskId: id
-            }
-        });
-
-        if (!item) {
-            return res.status(404).json({error: 'Checklist item not found'});
+        if (!itemResult.access.canManageItems) {
+            return res.status(403).json({error: 'Only deadline task members can edit checklist items'});
         }
 
         const updated = await prisma.deadlineChecklistItem.update({
             where: {id: itemId},
             data: {
-                isCompleted: !item.isCompleted
+                isCompleted: !itemResult.item.isCompleted
             }
         });
 
-        res.json(updated);
+        res.json({
+            ...updated,
+            viewerCanManage: true
+        });
+    } catch (error) {
+        res.status(500).json({error: error.message});
+    }
+};
+
+exports.updateDeadlineChecklistItem = async (req, res) => {
+    try {
+        const {id, itemId} = req.params;
+        const {title} = req.body || {};
+        const itemResult = await getDeadlineItemWithAccess(id, itemId, req.user.userId);
+
+        if (itemResult.error) {
+            return res.status(itemResult.error.status).json({error: itemResult.error.message});
+        }
+
+        if (!itemResult.access.canManageItems) {
+            return res.status(403).json({error: 'Only deadline task members can edit checklist items'});
+        }
+
+        if (!title?.trim()) {
+            return res.status(400).json({error: 'Checklist item title is required'});
+        }
+
+        const updated = await prisma.deadlineChecklistItem.update({
+            where: {id: itemId},
+            data: {
+                title: title.trim()
+            }
+        });
+
+        res.json({
+            ...updated,
+            viewerCanManage: true
+        });
     } catch (error) {
         res.status(500).json({error: error.message});
     }
@@ -492,25 +804,14 @@ exports.toggleDeadlineChecklistItem = async (req, res) => {
 exports.deleteDeadlineChecklistItem = async (req, res) => {
     try {
         const {id, itemId} = req.params;
-        const accessResult = await getDeadlineTaskAccess(id, req.user.userId);
+        const itemResult = await getDeadlineItemWithAccess(id, itemId, req.user.userId);
 
-        if (accessResult.error) {
-            return res.status(accessResult.error.status).json({error: accessResult.error.message});
+        if (itemResult.error) {
+            return res.status(itemResult.error.status).json({error: itemResult.error.message});
         }
 
-        if (!accessResult.access.canView) {
-            return res.status(403).json({error: 'You do not have permission to edit this deadline task'});
-        }
-
-        const item = await prisma.deadlineChecklistItem.findFirst({
-            where: {
-                id: itemId,
-                deadlineTaskId: id
-            }
-        });
-
-        if (!item) {
-            return res.status(404).json({error: 'Checklist item not found'});
+        if (!itemResult.access.canManageItems) {
+            return res.status(403).json({error: 'Only deadline task members can edit checklist items'});
         }
 
         await prisma.$transaction(async (transaction) => {
@@ -518,6 +819,7 @@ exports.deleteDeadlineChecklistItem = async (req, res) => {
                 where: {id: itemId}
             });
 
+            await normalizeSectionItemPositions(transaction, itemResult.item.sectionId);
             await normalizeChecklistPositions(transaction, id);
         });
 

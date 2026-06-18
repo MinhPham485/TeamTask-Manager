@@ -41,7 +41,7 @@ module.exports = (io) => {
             const decoded = jwt.verify(token, process.env.JWT_SECRET || 'SECRET_KEY');
             socket.user = decoded;
             next();
-        } catch (error) {
+        } catch {
             next(new Error('Unauthorized: Invalid token'));
         }
     });

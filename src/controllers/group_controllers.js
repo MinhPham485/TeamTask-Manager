@@ -48,6 +48,7 @@ exports.createGroup = async (req, res) => {
         });
         res.json(group);
     } catch (error) {
+        console.error(error);
         res.status(500).json({error: 'Failed to create group'});
     }   
 };
@@ -82,6 +83,7 @@ exports.joinGroup = async (req, res) => {
         res.json({message: 'Joined group successfully'});
     }
     catch (error) {
+        console.error(error);
         res.status(500).json({error: 'Failed to join group'});
     }
 };
@@ -98,6 +100,7 @@ exports.getGroups = async (req, res) => {
         });
         res.json(groups);
     } catch (error) {
+        console.error(error);
         res.status(500).json({error: 'Failed to fetch groups'});
     }
 };
@@ -158,6 +161,7 @@ exports.getGroupMembers = async (req, res) => {
         res.json(members);
     }
     catch (error) {
+        console.error(error);
         res.status(500).json({error: 'Failed to fetch group members'});
     }
 };
@@ -180,6 +184,7 @@ exports.updateGroup = async (req, res) => {
 
         res.json(updatedGroup);
     } catch (error) {
+        console.error(error);
         res.status(500).json({error: 'Failed to update group'});
     }
 };
@@ -227,6 +232,7 @@ exports.removeGroupMember = async (req, res) => {
 
         res.json({message: 'Member removed successfully'});
     } catch (error) {
+        console.error(error);
         res.status(500).json({error: 'Failed to remove group member'});
     }
 };
@@ -245,7 +251,6 @@ exports.deleteGroup = async (req, res) => {
         if (!group) {
             return res.status(404).json({error: 'Group not found'});
         }
-
         await prisma.$transaction(async (transaction) => {
             const tasks = await transaction.task.findMany({
                 where: {groupId: id},
@@ -321,6 +326,7 @@ exports.deleteGroup = async (req, res) => {
 
         res.json({message: 'Group deleted successfully'});
     } catch (error) {
+        console.error(error);
         res.status(500).json({error: 'Failed to delete group'});
     }
 };

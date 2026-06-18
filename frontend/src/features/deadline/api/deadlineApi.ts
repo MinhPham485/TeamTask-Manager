@@ -1,5 +1,5 @@
 import { http } from "@/shared/api/http";
-import { ChecklistItem, DeadlineSummary, DeadlineTask, Task } from "@/shared/types/models";
+import { ChecklistItem, DeadlineChecklistSection, DeadlineSummary, DeadlineTask, Task } from "@/shared/types/models";
 
 export type CreateDeadlineTaskPayload = {
   title: string;
@@ -17,10 +17,22 @@ function normalizeDeadlineChecklistItem(item: ChecklistItem) {
   };
 }
 
+function normalizeDeadlineChecklistSection(section: DeadlineChecklistSection) {
+  return {
+    ...section,
+    items: (section.items ?? []).map(normalizeDeadlineChecklistItem),
+  };
+}
+
 function normalizeDeadlineTask(task: DeadlineTask) {
+  const checklistSections = task.checklistSections?.map(normalizeDeadlineChecklistSection) ?? [];
+  const checklistItems = task.checklistItems?.map(normalizeDeadlineChecklistItem)
+    ?? checklistSections.flatMap((section) => section.items);
+
   return {
     ...task,
-    checklistItems: task.checklistItems?.map(normalizeDeadlineChecklistItem) ?? [],
+    checklistItems,
+    checklistSections,
   };
 }
 
@@ -48,15 +60,30 @@ export const deadlineApi = {
     const response = await http.post<DeadlineTask>(`/deadline-tasks/${taskId}/members`, payload);
     return normalizeDeadlineTask(response.data);
   },
-  createChecklistItem: async (taskId: string, payload: { title: string }) => {
-    const response = await http.post<ChecklistItem>(`/deadline-tasks/${taskId}/checklist`, payload);
+  createChecklistSection: async (taskId: string, payload: { title: string }) => {
+    const response = await http.post<DeadlineChecklistSection>(`/deadline-tasks/${taskId}/checklist/sections`, payload);
+    return normalizeDeadlineChecklistSection(response.data);
+  },
+  updateChecklistSection: async (taskId: string, sectionId: string, payload: { title: string }) => {
+    const response = await http.put<DeadlineChecklistSection>(`/deadline-tasks/${taskId}/checklist/sections/${sectionId}`, payload);
+    return normalizeDeadlineChecklistSection(response.data);
+  },
+  removeChecklistSection: async (taskId: string, sectionId: string) => {
+    await http.delete(`/deadline-tasks/${taskId}/checklist/sections/${sectionId}`);
+  },
+  createChecklistItem: async (taskId: string, payload: { sectionId: string; title: string }) => {
+    const response = await http.post<ChecklistItem>(`/deadline-tasks/${taskId}/checklist/items`, payload);
+    return normalizeDeadlineChecklistItem(response.data);
+  },
+  updateChecklistItem: async (taskId: string, itemId: string, payload: { title: string }) => {
+    const response = await http.put<ChecklistItem>(`/deadline-tasks/${taskId}/checklist/items/${itemId}`, payload);
     return normalizeDeadlineChecklistItem(response.data);
   },
   toggleChecklistItem: async (taskId: string, itemId: string) => {
-    const response = await http.patch<ChecklistItem>(`/deadline-tasks/${taskId}/checklist/${itemId}/toggle`);
+    const response = await http.patch<ChecklistItem>(`/deadline-tasks/${taskId}/checklist/items/${itemId}/toggle`);
     return normalizeDeadlineChecklistItem(response.data);
   },
   removeChecklistItem: async (taskId: string, itemId: string) => {
-    await http.delete(`/deadline-tasks/${taskId}/checklist/${itemId}`);
+    await http.delete(`/deadline-tasks/${taskId}/checklist/items/${itemId}`);
   },
 };
