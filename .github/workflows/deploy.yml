@@ -2,7 +2,7 @@ name: TeamTask Deploy
 
 on:
   workflow_run:
-    workflows: ["TeamTaskCI"]
+    workflows: ["TeamTask CI"]
     types: [completed]
   workflow_dispatch:
 
