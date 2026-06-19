@@ -1,5 +1,6 @@
 const {PrismaClient} = require('@prisma/client');
-const {buildDeadlineSummary, withDeadlineTaskMeta} = require('../services/deadline_service');
+const {buildDeadlineSummary, buildMyDeadlineSummary, withDeadlineTaskMeta} = require('../services/deadline_service');
+const {createDeadlineTaskAssignedNotification} = require('../services/notification_service');
 const {getGroupMembership, isGroupAdmin} = require('../services/task_permission_service');
 
 const prisma = new PrismaClient();
@@ -391,6 +392,36 @@ exports.getDeadlineTaskSummary = async (req, res) => {
     }
 };
 
+exports.getMyDeadlineTaskSummary = async (req, res) => {
+    try {
+        const tasks = await prisma.deadlineTask.findMany({
+            where: {
+                memberships: {
+                    some: {
+                        userId: req.user.userId
+                    }
+                }
+            },
+            include: deadlineTaskInclude,
+            orderBy: [
+                {dueDate: 'asc'},
+                {createdAt: 'asc'}
+            ]
+        });
+
+        const enrichedTasks = tasks
+            .map((task) => toDeadlineTaskResponse(task, {
+                canView: true,
+                canManage: false
+            }))
+            .map(withDeadlineTaskMeta);
+
+        res.json(buildMyDeadlineSummary({tasks: enrichedTasks}));
+    } catch (error) {
+        res.status(500).json({error: error.message});
+    }
+};
+
 exports.createDeadlineTask = async (req, res) => {
     try {
         const {title, description, groupId, dueDate, progress, priority} = req.body || {};
@@ -710,6 +741,8 @@ exports.addDeadlineTaskMember = async (req, res) => {
             return res.status(400).json({error: 'User is not a member of this group'});
         }
 
+        const existingMembership = (accessResult.task.memberships ?? []).find((membership) => membership.userId === userId);
+
         await prisma.deadlineTaskMember.upsert({
             where: {
                 deadlineTaskId_userId: {
@@ -726,6 +759,16 @@ exports.addDeadlineTaskMember = async (req, res) => {
                 role: normalizedRole
             }
         });
+
+        if (!existingMembership && userId !== req.user.userId) {
+            await createDeadlineTaskAssignedNotification({
+                recipientId: userId,
+                actorId: req.user.userId,
+                deadlineTaskId: id,
+                groupId: accessResult.task.groupId,
+                taskTitle: accessResult.task.title
+            });
+        }
 
         const task = await prisma.deadlineTask.findUnique({
             where: {id},

@@ -1,5 +1,6 @@
 const {
     buildDeadlineSummary,
+    buildMyDeadlineSummary,
     buildDeadlineWhere,
     getDeadlineBucket,
     getDaysOverdue,
@@ -182,6 +183,40 @@ describe('deadline service', () => {
             }
         ]);
         expect(buildDeadlineSummary({tasks, isAdmin: false}).workloadByMember).toEqual([]);
+    });
+
+    test('builds my deadline summary for today and overdue buckets', () => {
+        const tasks = [
+            withDeadlineTaskMeta({
+                dueDate: atLocalNoon(-1),
+                progress: 20,
+                priority: 'High',
+                checklistItems: []
+            }),
+            withDeadlineTaskMeta({
+                dueDate: atLocalNoon(0),
+                progress: 50,
+                priority: 'Medium',
+                checklistItems: []
+            }),
+            withDeadlineTaskMeta({
+                dueDate: atLocalNoon(2),
+                progress: 0,
+                priority: 'Low',
+                checklistItems: []
+            }),
+            withDeadlineTaskMeta({
+                dueDate: atLocalNoon(-3),
+                progress: 100,
+                priority: 'Done',
+                checklistItems: []
+            })
+        ];
+
+        expect(buildMyDeadlineSummary({tasks})).toEqual({
+            todayCount: 1,
+            overdueCount: 1
+        });
     });
 
     test('handles empty checklist items', () => {

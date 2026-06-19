@@ -121,6 +121,26 @@ export type DeadlineSummary = {
   }>;
 };
 
+export type MyDeadlineSummary = {
+  todayCount: number;
+  overdueCount: number;
+};
+
+export type Notification = {
+  id: string;
+  userId: string;
+  actorId?: string | null;
+  type: string;
+  title: string;
+  body: string;
+  isRead: boolean;
+  createdAt: string;
+  readAt?: string | null;
+  deadlineTaskId?: string | null;
+  groupId?: string | null;
+  actor?: User | null;
+};
+
 export type Label = {
   id: string;
   name: string;

@@ -292,8 +292,26 @@ const buildDeadlineSummary = ({tasks, isAdmin}) => {
     };
 };
 
+const buildMyDeadlineSummary = ({tasks}) => {
+    return tasks.reduce((summary, task) => {
+        if (task.deadlineBucket === 'today') {
+            summary.todayCount += 1;
+        }
+
+        if (task.deadlineBucket === 'overdue') {
+            summary.overdueCount += 1;
+        }
+
+        return summary;
+    }, {
+        todayCount: 0,
+        overdueCount: 0
+    });
+};
+
 module.exports = {
     buildDeadlineSummary,
+    buildMyDeadlineSummary,
     buildDeadlineWhere,
     getDeadlineBucket,
     getDaysOverdue,

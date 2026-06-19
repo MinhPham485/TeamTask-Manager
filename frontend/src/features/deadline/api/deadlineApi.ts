@@ -1,5 +1,5 @@
 import { http } from "@/shared/api/http";
-import { ChecklistItem, DeadlineChecklistSection, DeadlineSummary, DeadlineTask, Task } from "@/shared/types/models";
+import { ChecklistItem, DeadlineChecklistSection, DeadlineSummary, DeadlineTask, MyDeadlineSummary, Task } from "@/shared/types/models";
 
 export type CreateDeadlineTaskPayload = {
   title: string;
@@ -43,6 +43,10 @@ export const deadlineApi = {
   },
   getSummary: async (groupId: string) => {
     const response = await http.get<DeadlineSummary>(`/deadline-tasks/group/${groupId}/summary`);
+    return response.data;
+  },
+  getMySummary: async () => {
+    const response = await http.get<MyDeadlineSummary>("/deadline-tasks/me/summary");
     return response.data;
   },
   getTask: async (taskId: string) => {

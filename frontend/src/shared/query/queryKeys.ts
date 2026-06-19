@@ -16,6 +16,11 @@ export const queryKeys = {
     tasks: (groupId: string) => ["deadline", groupId, "tasks"] as const,
     task: (taskId: string) => ["deadline", "task", taskId] as const,
     summary: (groupId: string) => ["deadline", groupId, "summary"] as const,
+    mySummary: ["deadline", "me", "summary"] as const,
+  },
+  notifications: {
+    all: ["notifications"] as const,
+    unreadCount: ["notifications", "unread-count"] as const,
   },
   checklists: {
     byTask: (taskId: string) => ["checklists", taskId] as const,

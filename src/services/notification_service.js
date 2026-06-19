@@ -36,7 +36,80 @@ const createNotification = async ({
     });
 };
 
+const createDeadlineTaskAssignedNotification = async ({
+    recipientId,
+    actorId,
+    deadlineTaskId,
+    groupId,
+    taskTitle
+}) => {
+    if (!recipientId || !deadlineTaskId || !taskTitle) {
+        throw new Error('Missing required deadline task notification fields');
+    }
+
+    if (recipientId === actorId) {
+        return null;
+    }
+
+    return createNotification({
+        userId: recipientId,
+        actorId,
+        type: NOTIFICATION_TYPES.DEADLINE_TASK_ASSIGNED,
+        title: 'Ban duoc them vao deadline task',
+        body: `Ban vua duoc them vao "${taskTitle}"`,
+        deadlineTaskId,
+        groupId
+    });
+};
+
+const listUserNotifications = async (userId, limit = 10) => {
+    return prisma.notification.findMany({
+        where: {userId},
+        orderBy: {
+            createdAt: 'desc'
+        },
+        take: limit,
+        include: {
+            actor: {
+                select: {
+                    id: true,
+                    username: true,
+                    email: true
+                }
+            }
+        }
+    });
+};
+
+const getUnreadNotificationCount = async (userId) => {
+    return prisma.notification.count({
+        where: {
+            userId,
+            isRead: false
+        }
+    });
+};
+
+const markAllNotificationsAsRead = async (userId) => {
+    const result = await prisma.notification.updateMany({
+        where: {
+            userId,
+            isRead: false
+        },
+        data: {
+            isRead: true,
+            readAt: new Date()
+        }
+    });
+
+    return result.count;
+};
+
 module.exports = {
     NOTIFICATION_TYPES,
-    createNotification
+    createNotification,
+    createDeadlineTaskAssignedNotification,
+    listUserNotifications,
+    getUnreadNotificationCount,
+    markAllNotificationsAsRead
 };
