@@ -39,6 +39,8 @@ model User {
   taskMemberships         TaskMember[]
   deadlineTasksCreated    DeadlineTask[]       @relation("DeadlineTaskCreator")
   deadlineTaskMemberships DeadlineTaskMember[]
+  notifications           Notification[]       @relation("NotificationRecipient")
+  notificationsAuthored   Notification[]       @relation("NotificationActor")
 }
 
 model Group {
@@ -132,9 +134,33 @@ model DeadlineTask {
   memberships    DeadlineTaskMember[]
   checklistSections DeadlineChecklistSection[]
   checklistItems DeadlineChecklistItem[]
+  notifications Notification[]
 
   @@index([groupId, dueDate])
   @@index([createdBy])
+}
+
+model Notification {
+  id             String    @id @default(uuid())
+  userId         String
+  actorId        String?
+  type           String
+  title          String
+  body           String
+  isRead         Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  readAt         DateTime?
+  deadlineTaskId String?
+  groupId        String?
+
+  user         User          @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor        User?         @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  deadlineTask DeadlineTask? @relation(fields: [deadlineTaskId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@index([deadlineTaskId])
+  @@index([groupId])
+  @@index([actorId])
 }
 
 model DeadlineTaskMember {
