@@ -1,9 +1,13 @@
 import { PropsWithChildren, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { authStore } from "@/features/auth/store/authStore";
 import { disconnectSocketClient } from "@/features/chat/socket/socketClient";
 import { FloatingAiChat } from "@/features/chat/components/FloatingAiChat";
+import { deadlineApi } from "@/features/deadline/api/deadlineApi";
+import { notificationApi } from "@/features/notifications/api/notificationApi";
+import { queryKeys } from "@/shared/query/queryKeys";
+import { Notification } from "@/shared/types/models";
 
 const navItems = [
   { to: "/dashboard", label: "Groups", icon: "groups" },
@@ -13,6 +17,24 @@ const navItems = [
 ];
 
 const SIDEBAR_COLLAPSED_KEY = "teamtask:sidebar-collapsed";
+
+function BellIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3a4 4 0 0 0-4 4v2.5c0 .7-.2 1.4-.6 2L6 13.5V15h12v-1.5l-1.4-2A3.5 3.5 0 0 1 16 9.5V7a4 4 0 0 0-4-4Z" />
+      <path d="M9.5 18a2.5 2.5 0 0 0 5 0" />
+    </svg>
+  );
+}
+
+function formatNotificationTime(value: string) {
+  return new Intl.DateTimeFormat("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(new Date(value));
+}
 
 function NavIcon({ name }: { name: string }) {
   if (name === "groups") {
@@ -67,6 +89,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const clearSession = authStore((state) => state.clearSession);
   const user = authStore((state) => state.user);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -75,17 +98,55 @@ export function AppShell({ children }: PropsWithChildren) {
     return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
   });
 
+  const notificationsQuery = useQuery({
+    queryKey: queryKeys.notifications.all,
+    queryFn: notificationApi.getAll,
+    enabled: Boolean(user),
+    staleTime: 30_000,
+  });
+
+  const unreadCountQuery = useQuery({
+    queryKey: queryKeys.notifications.unreadCount,
+    queryFn: notificationApi.getUnreadCount,
+    enabled: Boolean(user),
+    staleTime: 30_000,
+  });
+
+  const myDeadlineSummaryQuery = useQuery({
+    queryKey: queryKeys.deadline.mySummary,
+    queryFn: deadlineApi.getMySummary,
+    enabled: Boolean(user),
+    staleTime: 30_000,
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: notificationApi.markAllAsRead,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unreadCount }),
+      ]);
+      setIsNotificationOpen(false);
+    },
+  });
+
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isSidebarCollapsed));
   }, [isSidebarCollapsed]);
 
   const handleLogout = () => {
     setIsUserMenuOpen(false);
+    setIsNotificationOpen(false);
     disconnectSocketClient();
     queryClient.clear();
     clearSession();
     navigate("/login", { replace: true });
   };
+
+  const notifications = notificationsQuery.data ?? [];
+  const unreadCount = unreadCountQuery.data ?? 0;
+  const deadlineSummary = myDeadlineSummaryQuery.data;
+  const hasDeadlineSignal = Boolean(deadlineSummary && (deadlineSummary.todayCount > 0 || deadlineSummary.overdueCount > 0));
 
   return (
     <div className={isSidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
@@ -126,6 +187,52 @@ export function AppShell({ children }: PropsWithChildren) {
         <header className="topbar">
           <h1>TeamTask Manager</h1>
           <div className="topbar-actions">
+            <div className="notification-menu">
+              <button
+                type="button"
+                className="notification-trigger"
+                onClick={() => setIsNotificationOpen((current) => !current)}
+                aria-label="Open notifications"
+                aria-expanded={isNotificationOpen}
+                title="Notifications"
+              >
+                <BellIcon />
+                {unreadCount > 0 ? <span className="notification-badge">{unreadCount}</span> : null}
+              </button>
+
+              {isNotificationOpen ? (
+                <div className="notification-panel" role="menu">
+                  <div className="notification-panel-header">
+                    <strong>Thông báo</strong>
+                    <button
+                      type="button"
+                      className="notification-mark-read"
+                      onClick={() => markAllReadMutation.mutate()}
+                      disabled={!unreadCount || markAllReadMutation.isPending}
+                    >
+                      Mark all read
+                    </button>
+                  </div>
+
+                  {notifications.length === 0 ? (
+                    <p className="muted-text notification-empty">Chưa có thông báo.</p>
+                  ) : (
+                    <div className="notification-list">
+                      {notifications.map((notification: Notification) => (
+                        <article key={notification.id} className={notification.isRead ? "notification-item" : "notification-item unread"}>
+                          <div className="notification-item-head">
+                            <strong>{notification.title}</strong>
+                            <span>{formatNotificationTime(notification.createdAt)}</span>
+                          </div>
+                          <p>{notification.body}</p>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
             <div className="user-menu">
               <button
                 type="button"
@@ -161,7 +268,34 @@ export function AppShell({ children }: PropsWithChildren) {
             </div>
           </div>
         </header>
-        <main className="content">{children}</main>
+        <main className="content">
+          {myDeadlineSummaryQuery.isLoading ? (
+            <section className="page-card shell-summary-card">
+              <p className="muted-text">Đang tải deadline summary...</p>
+            </section>
+          ) : hasDeadlineSignal ? (
+            <section className="page-card shell-summary-card">
+              <h2>Deadline hôm nay</h2>
+              <div className="shell-summary-grid">
+                <div>
+                  <strong>{deadlineSummary?.todayCount ?? 0}</strong>
+                  <span>task cần làm</span>
+                </div>
+                <div>
+                  <strong>{deadlineSummary?.overdueCount ?? 0}</strong>
+                  <span>task quá hạn</span>
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="page-card shell-summary-card">
+              <h2>Deadline hôm nay</h2>
+              <p className="muted-text">Không có deadline task cần chú ý hôm nay.</p>
+            </section>
+          )}
+
+          {children}
+        </main>
       </section>
 
       <nav className="mobile-nav">
