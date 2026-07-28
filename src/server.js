@@ -29,7 +29,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
     'http://localhost:5174',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:5173',
-    'http://127.0.0.1:5174'
+    'http://127.0.0.1:5174',
+    'http://23.236.53.175'
 ];
 const allowedOrigins = (process.env.CORS_ORIGINS || DEFAULT_ALLOWED_ORIGINS.join(','))
     .split(',')
