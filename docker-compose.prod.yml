@@ -53,7 +53,7 @@ services:
     volumes:
       - ./nginx/prod.conf:/etc/nginx/conf.d/default.conf:ro
       - certbot_www:/var/www/certbot
-      - certbot_conf:/etc/letsencrypt
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     ports:
       - "80:80"
       - "443:443"
@@ -64,7 +64,7 @@ services:
     container_name: teamtask-certbot
     volumes:
       - certbot_www:/var/www/certbot
-      - certbot_conf:/etc/letsencrypt
+      - /etc/letsencrypt:/etc/letsencrypt:ro
 volumes:
   pgdata:
   certbot_www:
