@@ -1,5 +1,6 @@
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
+const { getJwtSecret } = require('../config/auth_config');
 const app = require('../server');
 
 describe('API smoke tests', () => {
@@ -63,7 +64,7 @@ describe('API smoke tests', () => {
     test('POST /api/ai/group/:groupId/ask with invalid question should return 400', async () => {
         const token = jwt.sign(
             {userId: 'test-user-id'},
-            process.env.JWT_SECRET || 'SECRET_KEY'
+            getJwtSecret()
         );
 
         const response = await request(app)

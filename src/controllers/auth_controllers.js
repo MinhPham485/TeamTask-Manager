@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { createUploadUrl, buildPublicUrl } = require('../services/storage_service');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { getJwtSecret } = require('../config/auth_config');
 
 const {
     generateResetCode,
@@ -10,7 +11,6 @@ const {
     hashResetCode,
     sendPasswordResetEmail,
 } = require('../services/password_reset_service');
-require('dotenv').config();
 
 const isDatabaseUnavailable = (error) => {
     const message = typeof error?.message === 'string' ? error.message : '';
@@ -117,7 +117,7 @@ exports.login = async (req, res) => {
                 userId: user.id,
                 role: user.role
             },
-            process.env.JWT_SECRET || "SECRET_KEY",
+            getJwtSecret(),
             { expiresIn: '1h' }
         );
         res.json({

@@ -121,6 +121,9 @@ jobs:
                     set_env FROM_EMAIL "minh04082005@gmail.com"
                     set_env FROM_NAME "TaskManager"
 
+                    #Inject jwt secret
+                    set_env JWT_SECRET "${{ secrets.JWT_SECRET }}"
+
                     # Inject GCS settings
                     set_env GCS_PROJECT_ID "taskupload-496308"
                     set_env GCS_BUCKET "teamtaskmanager-demo-bucket"

@@ -3,6 +3,7 @@ const http = require('http');
 const cors = require('cors');
 const {Server} = require('socket.io');
 require('dotenv').config();
+const { getJwtSecret } = require('./config/auth_config');
 const authRoutes = require('./routes/auth_routes');
 const groupRoutes = require('./routes/group_routes');
 const taskRoutes = require('./routes/task_routes');
@@ -20,6 +21,7 @@ const { metricsMiddleware, metricsHandler } = require('./services/metrics_servic
 
 
 const app = express();
+getJwtSecret();
 const PORT = process.env.PORT || 5000;
 const DEFAULT_ALLOWED_ORIGINS = [
     'https://minhph.xyz',
