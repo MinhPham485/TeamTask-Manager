@@ -118,8 +118,8 @@ jobs:
                     set_env SMTP_PORT "587"
                     set_env SMTP_USER "${{ secrets.SMTP_USER }}"
                     set_env SMTP_PASS "${{ secrets.SMTP_PASS }}"
-                    set_env FROM_EMAIL "minh04082005@gmail.com"
-                    set_env FROM_NAME "TaskManager"
+                    set_env SMTP_FROM_EMAIL "minh04082005@gmail.com"
+                    set_env SMTP_FROM_NAME "TaskManager"
 
                     #Inject jwt secret
                     set_env JWT_SECRET "${{ secrets.JWT_SECRET }}"

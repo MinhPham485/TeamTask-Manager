@@ -9,3 +9,4 @@ PROJECT_NOTES.md
 *.tfstate
 *.tfstate.*
 .terraform.lock.hcl
+k8s/**/secret.yaml

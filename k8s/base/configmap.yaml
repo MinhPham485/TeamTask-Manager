@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: teamtask-backend-config
+data:
+  NODE_ENV: production
+  PORT: "5000"
+  CORS_ORIGINS: "http://teamtask.local,http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,https://minhph.xyz,https://www.minhph.xyz"
+  AI_FEATURE_ENABLED: "false"
+  AI_ALLOW_MOCK_WHEN_NO_KEY: "false"
+  GROQ_MODEL: llama-3.1-8b-instant
+  AI_REQUEST_TIMEOUT_MS: "30000"
+  AI_RETRY_COUNT: "1"
+  AI_MAX_QUESTION_CHARS: "800"
+  AI_RATE_LIMIT_PER_MINUTE: "20"
+  SMTP_HOST: smtp.gmail.com
+  SMTP_PORT: "587"
+  SMTP_FROM_EMAIL: "minh04082005@gmail.com"
+  SMTP_FROM_NAME: TeamTask
+  GCS_PROJECT_ID: "taskupload-496308"
+  GCS_BUCKET: "teamtaskmanager-demo-bucket"
+  GCS_CLIENT_EMAIL: "upload-service@taskupload-496308.iam.gserviceaccount.com"
+  GCS_PUBLIC_BASE_URL: "https://storage.googleapis.com/teamtaskmanager-demo-bucket"
+  GCS_UPLOAD_BASE_URL: ""
+  GCS_EMULATOR_HOST: ""
+  OTP_EXPIRES_MIN: "10"
+  OTP_MAX_ATTEMPTS: "5"
+  OTP_RESEND_COOLDOWN_SEC: "60"

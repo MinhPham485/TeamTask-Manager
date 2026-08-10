@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate-job
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          envFrom:
+            - secretRef:
+                name: teamtask-postgres-secret
+          command:
+            - sh
+            - -c
+            - until pg_isready -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 2; done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
+      containers:
+        - name: migrate
+          image: teamtask-backend:dev
+          imagePullPolicy: IfNotPresent
+          command:
+            - npm
+            - run
+            - migrate:deploy
+          envFrom:
+            - configMapRef:
+                name: teamtask-backend-config
+            - secretRef:
+                name: teamtask-backend-secret
+          resources:
+            requests:
+              cpu: 25m
+              memory: 96Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
