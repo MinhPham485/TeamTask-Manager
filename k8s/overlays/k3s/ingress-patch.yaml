@@ -1,3 +1,13 @@
 - op: replace
   path: /spec/ingressClassName
   value: traefik
+- op: add
+  path: /metadata/annotations
+  value:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls.certresolver: le
+- op: add
+  path: /spec/tls
+  value:
+    - hosts:
+        - minhph.xyz
