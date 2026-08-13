@@ -108,12 +108,6 @@ jobs:
                   cp -R k8s "$render_dir/"
                   sed -i "s/newTag: v2/newTag: ${image_tag}/g" "$render_dir/k8s/overlays/k3s/kustomization.yaml"
 
-                  echo "===> applying Traefik configuration"
-                  sudo k3s kubectl apply -f \
-                    "$render_dir/k8s/infra/traefik-acme.yaml"
-                  sudo k3s kubectl rollout status deployment/traefik \
-                    -n kube-system --timeout=180s
-                    
                   echo "===> recreating migration Job"
                   sudo k3s kubectl delete job migrate-job \
                     -n teamtask --ignore-not-found
