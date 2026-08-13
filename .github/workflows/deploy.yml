@@ -92,79 +92,49 @@ jobs:
                 key: ${{ secrets.DEPLOY_SSH_KEY }}
                 script_stop: true
                 script: |
-                    # enable debug output and fail fast for visible errors
-                    set -euo pipefail
-                    cd "${{ secrets.DEPLOY_PATH }}"
-                    echo "===> fetching latest"
-                    git fetch --all --prune
-                    git checkout main
-                    git pull --ff-only origin main
+                  set -euo pipefail
+                  cd "${{ secrets.DEPLOY_PATH }}"
                     
-                    touch .env.docker
+                  git fetch --all --prune
+                  git checkout main
+                  git pull --ff-only origin main
                     
-                    # delete existing GCS_PRIVATE_KEY
-                    awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/{ if ($1 != "GCS_PRIVATE_KEY") print }' .env.docker > .env.docker.tmp && mv .env.docker.tmp .env.docker
+                  image_tag="${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}"
 
-                    set_env() {
-                    key="$1"
-                    value="$2"
-                    # Robust replace-or-append using awk to avoid failing on grep exit codes
-                    awk -F= -v k="$key" -v v="$value" 'BEGIN{found=0} $1==k{print k"="v; found=1; next} {print} END{if(!found) print k"="v}' .env.docker > .env.docker.tmp && mv .env.docker.tmp .env.docker
-                    }
+                  render_dir="$(mktemp -d)"
+                  trap 'rm -rf "$render_dir"' EXIT
+                    
+                  # Render a temporary overlay so the VM checkout stays clean
+                  cp -R k8s "$render_dir/"
+                  sed -i "s/newTag: v2/newTag: ${image_tag}/g" "$render_dir/k8s/overlays/k3s/kustomization.yaml"
 
-                    # Inject SMTP provider defaults and credentials
-                    set_env SMTP_PROVIDER "gmail"
-                    set_env SMTP_HOST "smtp.gmail.com"
-                    set_env SMTP_PORT "587"
-                    set_env SMTP_USER "${{ secrets.SMTP_USER }}"
-                    set_env SMTP_PASS "${{ secrets.SMTP_PASS }}"
-                    set_env FROM_EMAIL "minh04082005@gmail.com"
-                    set_env FROM_NAME "TaskManager"
-
-                    #Inject jwt secret
-                    set_env JWT_SECRET "${{ secrets.JWT_SECRET }}"
-
-                    # Inject GCS settings
-                    set_env GCS_PROJECT_ID "taskupload-496308"
-                    set_env GCS_BUCKET "teamtaskmanager-demo-bucket"
-                    set_env GCS_CLIENT_EMAIL "upload-service@taskupload-496308.iam.gserviceaccount.com"
-                    if [ -z "${{ secrets.GCS_PRIVATE_KEY_BASE64 }}" ]; then
-                    echo "ERROR: GitHub secret GCS_PRIVATE_KEY_BASE64 is required"
+                  echo "===> applying Traefik configuration"
+                  sudo k3s kubectl apply -f \
+                    "$render_dir/k8s/infra/traefik-acme.yaml"
+                  sudo k3s kubectl rollout status deployment/traefik \
+                    -n kube-system --timeout=180s
+                    
+                  echo "===> recreating migration Job"
+                  sudo k3s kubectl delete job migrate-job \
+                    -n teamtask --ignore-not-found
+                    
+                  echo "===> applying K3s manifests"
+                  sudo k3s kubectl apply -k "$render_dir/k8s/overlays/k3s"
+                    
+                  echo "===> waiting for migration"
+                  if ! sudo k3s kubectl wait \
+                    --for=condition=complete job/migrate-job \
+                    -n teamtask --timeout=180s; then
+                    echo "ERROR: migration job failed"
+                    sudo k3s kubectl logs job/migrate-job  \
+                      -n teamtask -c migrate || true
                     exit 1
-                    fi
-                    set_env GCS_PRIVATE_KEY_BASE64 "${{ secrets.GCS_PRIVATE_KEY_BASE64 }}"
-                    set_env GCS_PUBLIC_BASE_URL "https://storage.googleapis.com/teamtaskmanager-demo-bucket"
+                  fi
 
-                    # Use images built by GitHub Actions so the VM only pulls and restarts containers.
-                    set_env BACKEND_IMAGE "${{ needs.build-images.outputs.backend-image }}"
-                    set_env FRONTEND_IMAGE "${{ needs.build-images.outputs.frontend-image }}"
+                  echo "===> waiting for application rollout"
+                  sudo k3s kubectl rollout status deployment/backend \
+                    -n teamtask --timeout=180s
+                  sudo k3s kubectl rollout status deployment/frontend \
+                    -n teamtask --timeout=180s
 
-                    # Login to GitHub Container Registry from the VM before pulling backend/frontend images.
-                    echo "===> logging in to GHCR"
-                    echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-
-                    echo "===> pulling prebuilt images"
-                    docker compose --env-file .env.docker -f docker-compose.prod.yml pull backend frontend
-
-                    echo "===> starting docker compose"
-                    if ! docker compose --env-file .env.docker -f docker-compose.prod.yml up -d; then
-                    echo "ERROR: docker compose up failed"
-                    docker compose --env-file .env.docker -f docker-compose.prod.yml logs --no-color || true
-                    exit 1
-                    fi
-
-                    sleep 10
-
-                    echo "===> running migrations inside backend"
-                    if ! docker compose --env-file .env.docker -f docker-compose.prod.yml exec -T backend npm run migrate:deploy; then
-                    docker compose --env-file .env.docker -f docker-compose.prod.yml logs backend --no-color || true
-                    exit 1
-                    fi
-
-                    echo "===> restarting nginx"
-                    if ! docker restart teamtask-nginx; then
-                    echo "WARN: nginx restart failed"
-                    docker ps -a || true
-                    fi
-
-                    docker compose --env-file .env.docker -f docker-compose.prod.yml ps
+                  sudo k3s kubectl get pods,job,ingress -n teamtask
