@@ -9,10 +9,10 @@ resources:
 images:
   - name: teamtask-backend
     newName: ghcr.io/minhpham485/teamtask-manager-backend
-    newTag: v2
+    newTag: d7f2f972044fb73b6b3bfea1d5c2a66feb657c75
   - name: teamtask-frontend
     newName: ghcr.io/minhpham485/teamtask-manager-frontend
-    newTag: v2
+    newTag: d7f2f972044fb73b6b3bfea1d5c2a66feb657c75
 
 patches:
   - path: ingress-patch.yaml
