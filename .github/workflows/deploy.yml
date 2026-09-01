@@ -92,7 +92,7 @@ jobs:
           env:
             IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
           run: |
-            sed -i "s/newTag: v2/newTag: ${IMAGE_TAG}/g" \
+            sed -i "s/newTag: .*/newTag: ${IMAGE_TAG}/g" \
               k8s/overlays/k3s/kustomization.yaml
 
         - name: Commit GitOps change
@@ -104,4 +104,3 @@ jobs:
             git add k8s/overlays/k3s/kustomization.yaml
             git commit -m "chore: deploy ${IMAGE_TAG} [skip ci]" || exit 0
             git push origin main
-   
