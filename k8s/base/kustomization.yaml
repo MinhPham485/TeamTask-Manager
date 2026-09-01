@@ -5,7 +5,6 @@ namespace: teamtask
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secret.yaml
   - postgres-service.yaml
   - postgres-statefulset.yaml
   - backend-service.yaml
