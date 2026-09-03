@@ -5,6 +5,8 @@ namespace: teamtask
 
 resources:
   - ../../base
+  - teamtask-backend-sealedsecret.yaml
+  - teamtask-postgres-sealedsecret.yaml
 
 images:
   - name: teamtask-backend
