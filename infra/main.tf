@@ -50,7 +50,7 @@ resource "google_compute_address" "vm_ip" {
 }
 resource "google_compute_instance" "vm" {
   name         = "task-manager-vm"
-  machine_type = "e2-small"
+  machine_type = "e2-medium"
   zone         = var.zone
 
   allow_stopping_for_update = true
